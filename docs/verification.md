@@ -1,4 +1,48 @@
-# EasyLatex 0.1.0 验收记录
+# EasyLatex 验收记录
+
+## 0.2.0：双向导航与性能
+
+日期：2026-10-08。环境与下方 0.1.0 记录一致。新增检查涵盖可见「设置」文字、左右定位按钮、双击/Ctrl 点击触发条件、Esc 取消、多文件主文件、与官方 SyncTeX CLI 的页码及文件比对、插入未保存行后的正反向映射、撤销、重开文件版本校验、空白点击、40 页预览、连续缩放、8 页图像缓存上限、容器虚拟化、保留重新编译前的阅读位置、干净文件不重复写盘、渲染期间重载及损坏 SyncTeX 时 PDF 仍可预览。
+
+最终完整检查 **113 项通过、0 失败**；独立定位基准及一致性检查 **4 项通过、0 失败**。正式结果与日志：`artifacts/release-verification-0.2.0/results.json`、`artifacts/release-verification-0.2.0.log`、`artifacts/release-performance-0.2.0/`。异常测试曾发现损坏压缩映射会中断加载，修复后完整重跑通过。
+
+```powershell
+$env:DOTNET_ROOT = (Resolve-Path .tools/dotnet).Path
+./.tools/dotnet/dotnet.exe run --project tests/EasyLatex.Tests -c Release -- artifacts/release-verification-0.2.0 --ui
+./.tools/dotnet/dotnet.exe run --project tests/EasyLatex.Tests -c Release -- artifacts/release-performance-0.2.0 --perf-only
+./scripts/build.ps1 -Publish -OutputName EasyLatex-0.2.0-win-x64
+./scripts/verify-portable.ps1 -AppPath artifacts/EasyLatex-0.2.0-win-x64/EasyLatex.exe -Output artifacts/portable-0.2.0
+```
+
+### 测量结果
+
+十万 SyncTeX 节点、10 个文件、500 页的合成基准：预热 10 次，测量 100 次；使用同一文档对照优化前后。随机查询还与原算法比对 100 次。
+
+| 指标 | 原实现 | 索引后 |
+| --- | --- | --- |
+| 正向查询 P50 / P95 | 20.58 / 23.84 ms | 0.0005 / 0.0006 ms |
+| 反向查询 P50 / P95 | 0.610 / 0.774 ms | 0.0036 / 0.0044 ms |
+| 反向查询每次线程分配 | 6,920 B | 0 B |
+| 读取与建表 | 359 ms | 390 ms |
+
+以上仅测算法查询，排除 UI 滚动和 PDF 渲染，亚毫秒数据不能当作跨机器承诺。索引多花约 31 ms 建表时间，已移到后台。原始记录在 `artifacts/optimization-baseline/performance.json` 和 `artifacts/final-sync-performance/performance.json`。
+
+真实 40 页文档做 12 次跨页跳转，并在每次跳转后连续放大/缩小：页面图像准备时间 P50 46.7 ms、该轮最大 81.3 ms（含 30 ms 轮询分辨率）。结果采样时缓存 3 页、实现容器 2 个；所有步骤均检查缓存不超过 8 页。该数字来自本机一次运行，未覆盖复杂图片文档与所有硬件。原始记录：`artifacts/usability-check/stress-performance.json`。
+
+相同源码的两种自包含包，各独立进程启动 5 次，隔离设置，启动后 1.5 秒采样内存。测量包含从启动到 UI 空闲就绪文件的时间，轮询分辨率 20 ms；未清空操作系统文件缓存，因此属于本机重复启动比较。
+
+| 打包方式 | ZIP | 解压目录 | 启动中位数 | 空文档工作集中位数 |
+| --- | --- | --- | --- | --- |
+| 压缩 EXE（默认） | 约 117.6 MiB | 约 190.1 MiB | 0.981 s | 333.5 MiB |
+| 不压缩 EXE（试验） | 约 119.6 MiB | 约 301.8 MiB | 0.984 s | 241.2 MiB |
+
+启动时间接近；默认保留较小的解压占用。不压缩版内存更少的原因与程序集映射/解压有关，未宣称减少全部文档运行内存。工作集会随 Windows 回收、字体、页面尺寸等变化。完整检查进程包含多个窗口、编译和截图，不能作为实际单窗口内存指标。
+
+复现打包比较：`build.ps1 -Publish -OutputName <新目录名>`，第二种再加 `-NoCompression`；使用 `measure-startup.ps1 -AppPath <EXE> -Output <新输出目录> -Runs 5`。原始记录在 `artifacts/startup-compressed/startup.json` 和 `artifacts/startup-uncompressed/startup.json`。
+
+设计参考、论文依据及范围说明见 [design.md](design.md)。新版本放在独立目录，没有覆盖用户正在运行的 0.1.0 或修改其文稿。Windows x64、内置三模板离线编译和外部 AI 的适用边界仍按下方记录。
+
+## 0.1.0
 
 日期：2026-10-08。实际环境：Windows build 26300、.NET SDK 10.0.401、TeX Live 2025、Tectonic 0.17.0。
 

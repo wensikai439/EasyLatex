@@ -15,7 +15,7 @@ using EasyLatex.Services;
 using ICSharpCode.AvalonEdit;
 using EasyLatex.Models;
 
-internal static class Program
+internal static partial class Program
 {
     private static int _passed, _failed;
     private static string Root = "";
@@ -36,7 +36,7 @@ internal static class Program
         var app = new App { ShutdownMode = ShutdownMode.OnExplicitShutdown }; app.InitializeComponent();
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { if (!args.Contains("--ui-only")) await CoreChecks(args.Contains("--unit-only")); if (args.Contains("--ui") || args.Contains("--ui-only")) await UiChecks(); }
+            try { if (args.Contains("--perf-only")) PerformanceChecks(); else if (args.Contains("--navigation-only")) await NavigationAndStressChecks(); else { if (!args.Contains("--ui-only")) await CoreChecks(args.Contains("--unit-only")); if (args.Contains("--ui") || args.Contains("--ui-only")) await UiChecks(); } }
             catch (Exception ex) { Fail("harness", ex.ToString()); }
             finally
             {
@@ -116,6 +116,7 @@ internal static class Program
         document.Save(); Check("editor-preserves-encoding", (await File.ReadAllBytesAsync(encodingFile)).SequenceEqual(Encoding.GetEncoding("GBK").GetBytes(legacy)));
         await File.WriteAllTextAsync(encodingFile, "external change");
         try { document.Save(); Fail("editor-protect-external-change", "overwrote"); } catch (IOException) { Check("editor-protect-external-change", File.ReadAllText(encodingFile) == "external change"); }
+        SourceCheckpointChecks();
 
         using (var cancel = new CancellationTokenSource(500))
         {
@@ -307,6 +308,7 @@ internal static class Program
         Check("ui-restore-unsaved-dirty-document", recoveredDoc.IsDirty && recoveredDoc.Document.Text.Contains(recoverySentinel) && recoveredDoc.FilePath == file);
         recovered.Close();
         window.Close();
+        await NavigationAndStressChecks();
     }
     private static async Task Until(Func<bool> ready, int timeout = 12_000)
     {

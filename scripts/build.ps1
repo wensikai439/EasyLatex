@@ -1,4 +1,4 @@
-param([switch]$Publish, [switch]$Verify)
+param([switch]$Publish, [switch]$Verify, [string]$OutputName = 'EasyLatex-win-x64', [switch]$NoCompression)
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $taskRoot
@@ -13,8 +13,10 @@ if ($Verify) {
     if ($LASTEXITCODE -ne 0) { throw 'Verification failed' }
 }
 if ($Publish) {
-    $output = Join-Path $taskRoot 'artifacts/EasyLatex-win-x64'
-    & $sdk publish src/EasyLatex -c Release -r win-x64 --self-contained true -o $output -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+    if ($OutputName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw 'OutputName must be a folder name within artifacts' }
+    $output = Join-Path $taskRoot ('artifacts/' + $OutputName)
+    $compression = if ($NoCompression) { 'false' } else { 'true' }
+    & $sdk publish src/EasyLatex -c Release -r win-x64 --self-contained true -o $output -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true "-p:EnableCompressionInSingleFile=$compression"
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed' }
     foreach ($debugFile in Get-ChildItem $output -Filter '*.pdb' -File) { Remove-Item -LiteralPath $debugFile.FullName }
     if (!(Test-Path '.tools/tectonic/tectonic.exe')) { throw 'Run scripts/bootstrap.ps1 to fetch the bundled compiler' }
@@ -37,8 +39,10 @@ if ($Publish) {
     }
     Copy-Item 'examples' $output -Recurse -Force
     Copy-Item 'docs' $output -Recurse -Force
-    Compress-Archive -Path "$output/*" -DestinationPath 'artifacts/EasyLatex-win-x64.zip' -Force
-    $hash = Get-FileHash 'artifacts/EasyLatex-win-x64.zip' -Algorithm SHA256
-    [IO.File]::WriteAllText((Join-Path $taskRoot 'artifacts/SHA256SUMS.txt'), $hash.Hash.ToLowerInvariant() + '  EasyLatex-win-x64.zip' + [Environment]::NewLine)
+    $zip = Join-Path $taskRoot ('artifacts/' + $OutputName + '.zip')
+    Compress-Archive -Path "$output/*" -DestinationPath $zip -Force
+    $hash = Get-FileHash $zip -Algorithm SHA256
+    $hashName = if ($OutputName -eq 'EasyLatex-win-x64') { 'SHA256SUMS.txt' } else { $OutputName + '.sha256.txt' }
+    [IO.File]::WriteAllText((Join-Path $taskRoot ('artifacts/' + $hashName)), $hash.Hash.ToLowerInvariant() + '  ' + $OutputName + '.zip' + [Environment]::NewLine)
     $hash | Format-List
 }

@@ -55,6 +55,7 @@ public sealed class DocumentSession : INotifyPropertyChanged
         if (FilePath is null) throw new InvalidOperationException("请先选择保存位置。");
         if (string.Equals(FilePath, _savedPath, StringComparison.OrdinalIgnoreCase) && File.Exists(FilePath) && File.GetLastWriteTimeUtc(FilePath) != _savedWriteTime)
             throw new IOException("文件已被其他程序修改。请另存为保留当前编辑内容，再重新打开原文件检查差异。");
+        if (!IsDirty && string.Equals(FilePath, _savedPath, StringComparison.OrdinalIgnoreCase) && File.Exists(FilePath)) return;
         var content = Encoding.GetPreamble().Concat(Encoding.GetBytes(Document.Text)).ToArray();
         var temporary = FilePath + ".easylatex.tmp";
         try

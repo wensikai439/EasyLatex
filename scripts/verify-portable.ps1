@@ -1,10 +1,10 @@
-param([string]$Output = 'artifacts/portable-default-verification')
+param([string]$Output = 'artifacts/portable-default-verification', [string]$AppPath = 'artifacts/EasyLatex-win-x64/EasyLatex.exe')
 $ErrorActionPreference = 'Stop'
 $taskRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $taskRoot
 $outputDirectory = [IO.Path]::GetFullPath((Join-Path $taskRoot $Output))
 if (Test-Path (Join-Path $outputDirectory 'result.json')) { throw 'Choose a fresh output directory for first-start verification' }
-$app = Join-Path $taskRoot 'artifacts/EasyLatex-win-x64/EasyLatex.exe'
+$app = [IO.Path]::GetFullPath((Join-Path $taskRoot $AppPath))
 $priorPath = $env:PATH
 $priorRoot = $env:DOTNET_ROOT
 $priorHttp = $env:HTTP_PROXY

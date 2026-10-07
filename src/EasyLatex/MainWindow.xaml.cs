@@ -29,7 +29,11 @@ public partial class MainWindow : Window
     private DocumentSession? _active;
     private readonly CompilerService _compiler = new();
     private readonly PdfService _pdf = new();
-    private readonly SyncTexService _syncTex = new();
+    private SyncTexService _syncTex = new();
+    private Dictionary<string, CompiledSource> _compiledSources = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, DateTime> _compiledFileTimes = new(StringComparer.OrdinalIgnoreCase);
+    private bool _reverseArmed;
+    private string? _previewPath;
     private CancellationTokenSource? _buildCancel, _aiCancel, _pdfCancel;
     private readonly DispatcherTimer _analysisTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly DispatcherTimer _autoTimer = new() { Interval = TimeSpan.FromMilliseconds(1600) };
@@ -55,7 +59,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); DataContext = this;
         Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/EasyLatex;component/Resources/EasyLatex.png"));
-        _settings = SettingsStore.Load(); Width = Math.Clamp(_settings.WindowWidth, 960, 2200); Height = Math.Clamp(_settings.WindowHeight, 620, 1600);
+        _settings = SettingsStore.Load();
+        Width = Math.Min(Math.Clamp(_settings.WindowWidth, 960, 2200), SystemParameters.WorkArea.Width);
+        Height = Math.Min(Math.Clamp(_settings.WindowHeight, 620, 1600), SystemParameters.WorkArea.Height);
         DocumentTabs.ItemsSource = _documents;
         using var reader = XmlReader.Create(Application.GetResourceStream(new Uri("/EasyLatex;component/Resources/LaTeX.xshd", UriKind.Relative))!.Stream);
         Editor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
@@ -139,6 +145,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            var previousPath = document.FilePath;
             if (document.FilePath is null || saveAs)
             {
                 var dialog = new SaveFileDialog { Filter = "LaTeX 文档|*.tex|BibTeX|*.bib|所有文件|*.*", FileName = document.FilePath is null ? "main.tex" : Path.GetFileName(document.FilePath), DefaultExt = ".tex" };
@@ -146,7 +153,8 @@ public partial class MainWindow : Window
                 if (_documents.Any(d => d != document && string.Equals(d.FilePath, dialog.FileName, StringComparison.OrdinalIgnoreCase))) { Notify("这个文件已在其他标签页打开。"); return false; }
                 document.FilePath = dialog.FileName;
             }
-            document.Save(); AddRecent(document.FilePath!); _projectRoot ??= Path.GetDirectoryName(document.FilePath); RefreshProject();
+            document.Save(); AddRecent(document.FilePath!); _projectRoot ??= Path.GetDirectoryName(document.FilePath);
+            if (!string.Equals(previousPath, document.FilePath, StringComparison.OrdinalIgnoreCase)) RefreshProject();
             Title = $"{document.Title} — EasyLatex"; StatusText.Text = "已保存 " + Path.GetFileName(document.FilePath); return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.EncoderFallbackException) { Notify(ex.Message); return false; }
@@ -169,6 +177,7 @@ public partial class MainWindow : Window
     }
     private void AddRecent(string path)
     {
+        if (_settings.RecentFiles.Count > 0 && string.Equals(_settings.RecentFiles[0], path, StringComparison.OrdinalIgnoreCase)) return;
         _settings.RecentFiles.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
         _settings.RecentFiles.Insert(0, path); _settings.RecentFiles = _settings.RecentFiles.Take(10).ToList(); SettingsStore.Save(_settings); RefreshRecents();
     }
@@ -206,10 +215,15 @@ public partial class MainWindow : Window
             if (depth > 4 || files.Count >= 500) return;
             try
             {
-                foreach (var path in Directory.GetFiles(dir).Where(p => new[] { ".tex", ".bib", ".sty", ".cls" }.Contains(Path.GetExtension(p).ToLowerInvariant()))) files.Add(new(path, Path.GetRelativePath(_projectRoot, path)));
-                foreach (var sub in Directory.GetDirectories(dir).Where(p => !Path.GetFileName(p).StartsWith('.') && (File.GetAttributes(p) & FileAttributes.ReparsePoint) == 0)) Visit(sub, depth + 1);
+                foreach (var path in Directory.EnumerateFiles(dir))
+                {
+                    var extension = Path.GetExtension(path).ToLowerInvariant();
+                    if (extension is ".tex" or ".bib" or ".sty" or ".cls") files.Add(new(path, Path.GetRelativePath(_projectRoot, path)));
+                    if (files.Count >= 500) break;
+                }
+                foreach (var sub in Directory.EnumerateDirectories(dir).Where(p => !Path.GetFileName(p).StartsWith('.') && (File.GetAttributes(p) & FileAttributes.ReparsePoint) == 0)) Visit(sub, depth + 1);
             }
-            catch (UnauthorizedAccessException) { }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { }
         }
         Visit(_projectRoot, 0); ProjectList.ItemsSource = files.OrderBy(p => p.Label).ToList();
     }
@@ -228,6 +242,7 @@ public partial class MainWindow : Window
         catch (IOException ex) { Notify(ex.Message); return; }
         if (!File.Exists(master)) { Notify("主文件不存在：" + master); return; }
         _autoTimer.Stop(); _building = true; _buildCancel = new(); CompileButton.Content = "取消编译"; StatusText.Text = "正在编译…";
+        var compiledSources = _documents.Where(d => d.FilePath is not null).ToDictionary(d => d.FilePath!, d => new CompiledSource(d), StringComparer.OrdinalIgnoreCase);
         try
         {
             var result = await _compiler.BuildAsync(master, _settings, line => Dispatcher.BeginInvoke(() => { if (line.Contains("Downloading") || line.Contains("download", StringComparison.OrdinalIgnoreCase)) StatusText.Text = "正在获取所需宏包…"; }), _buildCancel.Token);
@@ -237,7 +252,7 @@ public partial class MainWindow : Window
             if (result.Cancelled) StatusText.Text = "已取消编译 · 上次预览仍保留";
             else if (result.Success && result.PdfPath is { } path)
             {
-                await LoadPdfAsync(path); _syncTex.Load(path);
+                await LoadPdfAsync(path); _compiledSources = compiledSources;
                 StatusText.Text = $"编译完成 · {result.Duration.TotalSeconds:F1} 秒"; EngineStatus.Text = result.Engine;
                 if (errors == 0 && warnings == 0) DiagnosticsPanel.Visibility = Visibility.Collapsed;
             }
@@ -252,12 +267,30 @@ public partial class MainWindow : Window
     }
     public async Task LoadPdfAsync(string path)
     {
+        var scroll = FindDescendant<ScrollViewer>(PdfPages);
+        var oldOffset = string.Equals(path, _previewPath, StringComparison.OrdinalIgnoreCase) ? scroll?.VerticalOffset ?? 0 : 0;
         _pdfCancel?.Cancel(); _pdfCancel?.Dispose(); _pdfCancel = new(); _pdfGeneration++;
+        var syncTask = Task.Run(() =>
+        {
+            var sync = new SyncTexService();
+            try { sync.Load(path); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or FormatException or ArgumentException) { sync = new SyncTexService(); }
+            return sync;
+        });
         await _pdf.LoadAsync(path); Pages.Clear(); _renderCache.Clear();
+        _syncTex = await syncTask; _compiledSources.Clear();
+        _compiledFileTimes = _syncTex.Points.Select(p => p.FilePath).Distinct(StringComparer.OrdinalIgnoreCase).Where(p => Path.GetExtension(p).Equals(".tex", StringComparison.OrdinalIgnoreCase) && File.Exists(p)).ToDictionary(p => p, File.GetLastWriteTimeUtc, StringComparer.OrdinalIgnoreCase);
+        _previewPath = path; SetReverseArmed(false);
         // WinRT exposes PDF dimensions in 96-DPI DIPs; SyncTeX uses 72-DPI PDF points.
         for (var i = 0; i < _pdf.PageCount; i++) { var size = _pdf.Size(i); Pages.Add(new() { Index = i, PointWidth = size.Width * 72 / 96, PointHeight = size.Height * 72 / 96, Width = PageWidth() }); }
         PreviewEmpty.Visibility = Visibility.Collapsed; PreviewLabel.Text = $"PDF · {_pdf.PageCount} 页";
-        if (Pages.Count > 0) await RenderPageAsync(Pages[0]);
+        PdfPages.UpdateLayout(); scroll?.ScrollToVerticalOffset(oldOffset); PdfPages.UpdateLayout();
+        if (Pages.Count > 0)
+        {
+            var visible = FindDescendant<VirtualizingStackPanel>(PdfPages)?.Children.OfType<ListBoxItem>().FirstOrDefault(item => item.TranslatePoint(new Point(0, 0), PdfPages).Y + item.ActualHeight > 0)?.DataContext as PdfPageModel;
+            await RenderPageAsync(visible ?? Pages[0]);
+        }
+        SchedulePdfRender();
     }
     private double PageWidth() => _fitWidth ? Math.Max(220, PdfPages.ActualWidth - 48) : 595 * _zoom;
     private void PdfPage_Loaded(object sender, RoutedEventArgs e) => SchedulePdfRender();
@@ -270,8 +303,9 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             _pdfRenderScheduled = false;
-            foreach (var page in Pages)
-                if (PdfPages.ItemContainerGenerator.ContainerFromItem(page) is ListBoxItem { IsVisible: true, ActualHeight: > 0 } item)
+            if (FindDescendant<VirtualizingStackPanel>(PdfPages) is not { } panel) return;
+            foreach (var item in panel.Children.OfType<ListBoxItem>())
+                if (item is { IsVisible: true, ActualHeight: > 0 } && item.DataContext is PdfPageModel page)
                 {
                     var top = item.TranslatePoint(new Point(0, 0), PdfPages).Y;
                     if (top + item.ActualHeight > 0 && top < PdfPages.ActualHeight) _ = RenderPageAsync(page);
@@ -325,17 +359,45 @@ public partial class MainWindow : Window
     }
     private void PdfPage_Click(object sender, MouseButtonEventArgs e)
     {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0 || ((FrameworkElement)sender).DataContext is not PdfPageModel page) return;
+        if (!IsReverseGesture(e.ClickCount, Keyboard.Modifiers, _reverseArmed) || ((FrameworkElement)sender).DataContext is not PdfPageModel page) return;
         var at = e.GetPosition((IInputElement)sender);
-        var point = _syncTex.Reverse(page.Number, at.X / page.Width * page.PointWidth, at.Y / page.Height * page.PointHeight);
-        if (point is null) { StatusText.Text = "此位置没有对应的源码信息"; return; }
-        if (File.Exists(point.FilePath)) { OpenPath(point.FilePath); JumpToLine(point.Line); }
-        e.Handled = true;
+        e.Handled = true; NavigateFromPdf(page.Number, at.X / page.Width * page.PointWidth, at.Y / page.Height * page.PointHeight);
+    }
+    internal static bool IsReverseGesture(int clickCount, ModifierKeys modifiers, bool armed) => armed || clickCount == 2 || (modifiers & ModifierKeys.Control) != 0;
+    private void ReverseSearch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_syncTex.Points.Count == 0) { StatusText.Text = "请先编译，再使用源码与 PDF 定位"; return; }
+        SetReverseArmed(!_reverseArmed);
+        StatusText.Text = _reverseArmed ? "点击 PDF 正文定位源码 · Esc 取消" : "已取消定位源码";
+    }
+    private void SetReverseArmed(bool armed)
+    {
+        _reverseArmed = armed; PdfPages.Cursor = armed ? Cursors.Cross : null;
+        ReverseButton.Content = armed ? "点击 PDF…" : "← 定位源码";
+    }
+    internal bool NavigateFromPdf(int page, double x, double y)
+    {
+        var point = _syncTex.Reverse(page, x, y);
+        if (point is null) { StatusText.Text = "此位置没有对应的源码信息，请点击正文"; return false; }
+        if (!File.Exists(point.FilePath)) { StatusText.Text = "源码文件已移动或删除，请重新打开项目"; return false; }
+        var existing = _documents.FirstOrDefault(d => string.Equals(d.FilePath, point.FilePath, StringComparison.OrdinalIgnoreCase));
+        if (!_compiledSources.ContainsKey(point.FilePath) && _compiledFileTimes.TryGetValue(point.FilePath, out var time) && time != File.GetLastWriteTimeUtc(point.FilePath))
+        { StatusText.Text = "源码已在外部改变，请重新编译后定位"; return false; }
+        if (existing is not null && _compiledSources.TryGetValue(point.FilePath, out var before) && before.ReverseLine(existing, point.Line) is null)
+        { StatusText.Text = "源码已重新打开并改变，请重新编译后定位"; return false; }
+        OpenPath(point.FilePath);
+        if (_active?.FilePath is null || !string.Equals(_active.FilePath, point.FilePath, StringComparison.OrdinalIgnoreCase)) return false;
+        var line = _compiledSources.TryGetValue(point.FilePath, out var source) ? source.ReverseLine(_active, point.Line) : point.Line;
+        if (line is null) { StatusText.Text = "源码已经改变，请重新编译后定位"; return false; }
+        JumpToLine(line.Value); var selected = Editor.Document.GetLineByNumber(Editor.TextArea.Caret.Line); Editor.Select(selected.Offset, selected.Length);
+        SetReverseArmed(false); StatusText.Text = $"已定位到 {Path.GetFileName(point.FilePath)} 第 {line} 行"; return true;
     }
     private void ForwardSearch_Click(object sender, RoutedEventArgs e)
     {
-        if (_active?.FilePath is null) return;
-        var point = _syncTex.Forward(_active.FilePath, Editor.TextArea.Caret.Line);
+        if (_active?.FilePath is null) { StatusText.Text = "请先保存并编译文档"; return; }
+        var line = _compiledSources.TryGetValue(_active.FilePath, out var source) ? source.ForwardLine(_active, Editor.CaretOffset) : _active.IsDirty ? null : (int?)Editor.TextArea.Caret.Line;
+        if (line is null) { StatusText.Text = "源码已经改变，请重新编译后定位"; return; }
+        var point = _syncTex.Forward(_active.FilePath, line.Value);
         if (point is null || point.Page > Pages.Count) { StatusText.Text = "请先编译，再使用源码与 PDF 定位"; return; }
         var page = Pages[point.Page - 1]; PdfPages.ScrollIntoView(page); PdfPages.SelectedItem = page; StatusText.Text = $"已定位到 PDF 第 {point.Page} 页";
         foreach (var other in Pages) other.Mark(other == page ? point : null);
@@ -517,15 +579,15 @@ public partial class MainWindow : Window
             e.Handled = true;
         }
         else if (e.Key == Key.F11) { Focus_Click(sender, e); e.Handled = true; }
-        else if (e.Key == Key.Escape) { if (_completion is not null) _completion.Close(); else if (AiPanel.Visibility == Visibility.Visible) AiPanel.Visibility = Visibility.Collapsed; else FindBar.Visibility = Visibility.Collapsed; }
+        else if (e.Key == Key.Escape) { if (_reverseArmed) { SetReverseArmed(false); StatusText.Text = "已取消定位源码"; } else if (_completion is not null) _completion.Close(); else if (AiPanel.Visibility == Visibility.Visible) AiPanel.Visibility = Visibility.Collapsed; else FindBar.Visibility = Visibility.Collapsed; }
     }
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e) { SidebarColumn.Width = SidebarColumn.Width.Value == 0 ? new GridLength(210) : new GridLength(0); }
     private void Focus_Click(object sender, RoutedEventArgs e) { _focus = !_focus; SidebarColumn.Width = new GridLength(_focus ? 0 : 210); PreviewPane.Visibility = _focus ? Visibility.Collapsed : Visibility.Visible; PreviewColumn.MinWidth = _focus ? 0 : 270; PreviewColumn.Width = _focus ? new GridLength(0) : new GridLength(1, GridUnitType.Star); AiPanel.Visibility = Visibility.Collapsed; }
     private void Theme_Click(object sender, RoutedEventArgs e) { _settings.DarkMode = !_settings.DarkMode; ApplySettings(); SettingsStore.Save(_settings); }
     private void ToggleDiagnostics_Click(object sender, RoutedEventArgs e) => DiagnosticsPanel.Visibility = DiagnosticsPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
     private void CloseDiagnostics_Click(object sender, RoutedEventArgs e) => DiagnosticsPanel.Visibility = Visibility.Collapsed;
-    private void Shortcuts_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "Ctrl+N  新建\nCtrl+O  打开\nCtrl+S  保存\nCtrl+Shift+S  另存为\nCtrl+Enter  保存并编译 / 取消编译\nCtrl+F / Ctrl+H  查找 / 替换\nCtrl+/  注释 / 取消注释\nCtrl+J  定位 PDF\nCtrl+点击 PDF  定位源码\nCtrl+滚轮  缩放 PDF\nF11  专注写作\nCtrl+Z  撤销（包括 AI 修改）", "EasyLatex 快捷键");
-    private void About_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "EasyLatex 0.1.0\n一个轻量 LaTeX 一键使用编译器。\n\nWindows 原生界面 · 本地写作 · 可选 API AI 助手\n基于 AvalonEdit，使用 Windows 原生 PDF 渲染。\nMIT 开源。", "关于 EasyLatex");
+    private void Shortcuts_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "Ctrl+N  新建\nCtrl+O  打开\nCtrl+S  保存\nCtrl+Shift+S  另存为\nCtrl+Enter  保存并编译 / 取消编译\nCtrl+F / Ctrl+H  查找 / 替换\nCtrl+/  注释 / 取消注释\nCtrl+J / 定位 PDF 按钮  定位 PDF\n双击正文 / Ctrl+点击 PDF  定位源码\n定位源码按钮 → 点击正文  定位源码\nCtrl+滚轮  缩放 PDF\nF11  专注写作\nCtrl+Z  撤销（包括 AI 修改）", "EasyLatex 快捷键");
+    private void About_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "EasyLatex 0.2.0\n一个轻量 LaTeX 一键使用编译器。\n\nWindows 原生界面 · 本地写作 · 可选 API AI 助手\n基于 AvalonEdit，使用 Windows 原生 PDF 渲染。\nMIT 开源。", "关于 EasyLatex");
     private void Window_Drop(object sender, DragEventArgs e) { if (e.Data.GetData(DataFormats.FileDrop) is string[] files) foreach (var file in files.Where(File.Exists)) OpenPath(file); }
     private void Notify(string message) { StatusText.Text = message; if (!_verificationMode) MessageBox.Show(this, message, "EasyLatex", MessageBoxButton.OK, MessageBoxImage.Warning); }
     private void WriteRecovery()
