@@ -14,8 +14,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: '10.0.x'
       - name: Build
@@ -23,6 +23,12 @@ jobs:
       - name: Verify parser, patch safety, API protocol and process cancellation
         run: dotnet run --project tests/EasyLatex.Tests -c Release --no-build -- artifacts/unit-verification --unit-only
       - name: Fetch verified compiler
+        # Templates pin the resource subset; bootstrap still verifies online and offline builds.
+        uses: actions/cache@v6.1.0
+        with:
+          path: .tools/compiler-cache
+          key: windows-tectonic-0.17.0-${{ hashFiles('src/EasyLatex/Templates.cs') }}
+      - name: Prepare verified compiler and template resources
         shell: pwsh
         run: ./scripts/bootstrap.ps1 -WarmCache
       - name: Publish self-contained portable app
@@ -31,7 +37,7 @@ jobs:
       - name: Verify published app with empty cache and blocked network
         shell: pwsh
         run: ./scripts/verify-portable.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: EasyLatex-win-x64
           path: |

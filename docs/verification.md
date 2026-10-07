@@ -4,7 +4,7 @@
 
 ## 本机验证
 
-`tests/EasyLatex.Tests` 完整检查结果：**84 项通过，0 失败**。包括真实编译、编辑操作、HTTP 模拟服务、Windows 凭据管理器、PDF 渲染和界面截图检查。
+`tests/EasyLatex.Tests` 完整检查结果：**85 项通过，0 失败**。包括真实编译、编辑操作、HTTP 模拟服务、Windows 凭据管理器、PDF 渲染和界面截图检查。日志展开和重渲染期间也检查已有 PDF 图像持续可见。
 
 ```powershell
 ./scripts/bootstrap.ps1 -WarmCache

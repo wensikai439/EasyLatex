@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private double _zoom = 1;
     private bool _fitWidth = true;
     private int _pdfGeneration;
+    private bool _pdfRenderScheduled;
     private readonly Dictionary<PdfPageModel, Task> _rendering = [];
     private readonly Queue<PdfPageModel> _renderCache = new();
     private (DocumentSession Doc, string Source, int Offset, string Result)? _proposal;
@@ -259,11 +260,27 @@ public partial class MainWindow : Window
         if (Pages.Count > 0) await RenderPageAsync(Pages[0]);
     }
     private double PageWidth() => _fitWidth ? Math.Max(220, PdfPages.ActualWidth - 48) : 595 * _zoom;
-    private async void PdfPage_Loaded(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is PdfPageModel page) await RenderPageAsync(page); }
-    private async void PdfPage_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e) { if (e.NewValue is PdfPageModel page) await RenderPageAsync(page); }
+    private void PdfPage_Loaded(object sender, RoutedEventArgs e) => SchedulePdfRender();
+    private void PdfPage_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e) => SchedulePdfRender();
+    private void Pdf_ScrollChanged(object sender, ScrollChangedEventArgs e) => SchedulePdfRender();
+    private void SchedulePdfRender()
+    {
+        if (_pdfRenderScheduled) return;
+        _pdfRenderScheduled = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _pdfRenderScheduled = false;
+            foreach (var page in Pages)
+                if (PdfPages.ItemContainerGenerator.ContainerFromItem(page) is ListBoxItem { IsVisible: true, ActualHeight: > 0 } item)
+                {
+                    var top = item.TranslatePoint(new Point(0, 0), PdfPages).Y;
+                    if (top + item.ActualHeight > 0 && top < PdfPages.ActualHeight) _ = RenderPageAsync(page);
+                }
+        }, DispatcherPriority.Loaded);
+    }
     private async Task RenderPageAsync(PdfPageModel page)
     {
-        if (page.Image is not null || _pdfCancel is null) return;
+        if (_pdfCancel is null || page.Image is { } cached && Math.Abs(cached.PixelWidth - Math.Clamp(page.Width * VisualTreeHelper.GetDpi(this).DpiScaleX, 200, 2400)) < 2) return;
         if (_rendering.TryGetValue(page, out var pending)) { await pending; return; }
         var task = RenderPageCoreAsync(page, _pdfGeneration, _pdfCancel.Token);
         _rendering[page] = task;
@@ -280,7 +297,10 @@ public partial class MainWindow : Window
                 var image = await _pdf.RenderAsync(page.Index, requestedWidth, token);
                 if (generation != _pdfGeneration || token.IsCancellationRequested || image is null) return;
                 if (Math.Abs(requestedWidth - page.Width * dpi) > 0.5) continue;
-                page.Image = image; _renderCache.Enqueue(page);
+                page.Image = image;
+                var previous = _renderCache.Where(p => p != page).ToArray();
+                _renderCache.Clear(); foreach (var entry in previous) _renderCache.Enqueue(entry);
+                _renderCache.Enqueue(page);
                 while (_renderCache.Count > 8) { var old = _renderCache.Dequeue(); if (old != page) old.Image = null; }
                 return;
             }
@@ -288,14 +308,12 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex) { StatusText.Text = "PDF 预览暂未完成：" + ex.Message; }
     }
-    private void Pdf_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitWidth && _initialized) UpdatePageWidths(); }
+    private void Pdf_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitWidth && _initialized && e.WidthChanged) UpdatePageWidths(); }
     private void UpdatePageWidths()
     {
-        _renderCache.Clear();
-        foreach (var page in Pages) { page.Width = PageWidth(); page.Image = null; }
+        foreach (var page in Pages) page.Width = PageWidth();
         ZoomLabel.Content = _fitWidth ? "适合宽度" : $"{_zoom:P0}";
-        foreach (var page in Pages)
-            if (PdfPages.ItemContainerGenerator.ContainerFromItem(page) is ListBoxItem { IsVisible: true }) _ = RenderPageAsync(page);
+        SchedulePdfRender();
     }
     private void ZoomOut_Click(object sender, RoutedEventArgs e) { _fitWidth = false; _zoom = Math.Max(0.4, _zoom - 0.15); UpdatePageWidths(); }
     private void ZoomIn_Click(object sender, RoutedEventArgs e) { _fitWidth = false; _zoom = Math.Min(3, _zoom + 0.15); UpdatePageWidths(); }

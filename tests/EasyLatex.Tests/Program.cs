@@ -239,7 +239,8 @@ internal static class Program
         Check("settings-delete-key-targets-visible-provider", (string?)typeof(SettingsWindow).GetField("_keyToDelete", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(keySettings) == server.Endpoint + "/other");
         editor.Document.Insert(editor.Text.IndexOf("Every good"), "\\unknowncommand ");
         await window.CompileAsync();
-        Check("ui-failed-build-keeps-preview", window.Pages.Count > 0 && ((Border)window.FindName("DiagnosticsPanel")).Visibility == Visibility.Visible);
+        window.UpdateLayout();
+        Check("ui-failed-build-keeps-preview", window.Pages.Count > 0 && window.Pages[0].Image is not null && ((Border)window.FindName("DiagnosticsPanel")).Visibility == Visibility.Visible);
         Capture(window, "compile-error.png");
         editor.Document.UndoStack.Undo(); await window.CompileAsync();
         Check("ui-undo-recompile", ((TextBlock)window.FindName("StatusText")).Text.StartsWith("编译完成"));
@@ -285,6 +286,7 @@ internal static class Program
         var previous = window.Pages[^1].Width;
         var zoomButton = FindVisual<Button>(window).First(b => System.Windows.Automation.AutomationProperties.GetName(b) == "放大预览");
         zoomButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); zoomButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check("ui-zoom-retains-image-during-render", window.Pages[^1].Image is not null);
         await Until(() => window.Pages[^1].Image is { } bitmap && Math.Abs(bitmap.PixelWidth - Math.Clamp(window.Pages[^1].Width * VisualTreeHelper.GetDpi(window).DpiScaleX, 200, 2400)) < 2);
         Check("ui-pdf-zoom", window.Pages[^1].Width != previous && window.Pages[^1].Image is not null);
         Capture(window, "multi-page.png");
