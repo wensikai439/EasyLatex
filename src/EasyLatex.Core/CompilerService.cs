@@ -54,8 +54,13 @@ public sealed class CompilerService
             {
                 var args = new List<string> { "-X", "compile", "--synctex", "--keep-logs", "--keep-intermediates", "--outdir", buildDir };
                 if (!settings.AllowShellEscape) args.Add("--untrusted");
+                if (settings.OfflineBuild) args.Add("--only-cached");
                 args.Add(masterFile);
-                var r = await ProcessRunner.RunAsync(tool.Path, args, directory, progress, token);
+                var fontConfig = Path.Combine(buildDir, "fonts.conf");
+                var fonts = System.Security.SecurityElement.Escape(Environment.GetFolderPath(Environment.SpecialFolder.Fonts).Replace('\\', '/'));
+                var fontCache = System.Security.SecurityElement.Escape(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyLatex", "font-cache").Replace('\\', '/'));
+                await File.WriteAllTextAsync(fontConfig, $"<?xml version=\"1.0\"?><fontconfig><dir>{fonts}</dir><cachedir>{fontCache}</cachedir></fontconfig>", token);
+                var r = await ProcessRunner.RunAsync(tool.Path, args, directory, progress, token, new Dictionary<string, string> { ["FONTCONFIG_FILE"] = fontConfig });
                 output.Append(r.Output); exit = r.ExitCode;
             }
             else if (FindTool("latexmk", settings.CompilerDirectory) is { } latexmk)

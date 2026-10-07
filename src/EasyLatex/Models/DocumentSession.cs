@@ -11,7 +11,12 @@ public sealed class DocumentSession : INotifyPropertyChanged
     public string? FilePath { get; set; }
     public TextDocument Document { get; } = new();
     public Encoding Encoding { get; private set; } = new UTF8Encoding(false, true);
-    public bool IsDirty { get; private set; }
+    private bool _forcedDirty;
+    public bool IsDirty => _forcedDirty || !Document.UndoStack.IsOriginalFile;
+    private bool _isActive;
+    public bool IsActive { get => _isActive; set { _isActive = value; PropertyChanged?.Invoke(this, new(nameof(IsActive))); } }
+    private DateTime _savedWriteTime;
+    private string? _savedPath;
     public string Title => (FilePath is null ? "未命名.tex" : Path.GetFileName(FilePath)) + (IsDirty ? " •" : "");
     public event PropertyChangedEventHandler? PropertyChanged;
     public DocumentSession(string text = "", string? path = null)
@@ -19,11 +24,12 @@ public sealed class DocumentSession : INotifyPropertyChanged
         FilePath = path;
         Document.Text = text;
         Document.UndoStack.ClearAll();
-        Document.Changed += (_, _) => { IsDirty = true; PropertyChanged?.Invoke(this, new(nameof(Title))); };
+        Document.UndoStack.MarkAsOriginalFile();
+        Document.Changed += (_, _) => PropertyChanged?.Invoke(this, new(nameof(Title)));
         Document.UndoStack.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(Document.UndoStack.IsOriginalFile))
-            { IsDirty = !Document.UndoStack.IsOriginalFile; PropertyChanged?.Invoke(this, new(nameof(Title))); }
+            { PropertyChanged?.Invoke(this, new(nameof(Title))); }
         };
     }
     public static DocumentSession Load(string path)
@@ -41,22 +47,25 @@ public sealed class DocumentSession : INotifyPropertyChanged
             var m = Regex.Match(header, @"(?im)^\s*%\s*!\s*TeX\s+encoding\s*=\s*(\S+)");
             if (m.Success) encoding = Encoding.GetEncoding(m.Groups[1].Value, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback);
         }
-        try { return new DocumentSession(encoding.GetString(bytes, offset, bytes.Length - offset), Path.GetFullPath(path)) { Encoding = encoding }; }
+        try { return new DocumentSession(encoding.GetString(bytes, offset, bytes.Length - offset), Path.GetFullPath(path)) { Encoding = encoding, _savedPath = Path.GetFullPath(path), _savedWriteTime = File.GetLastWriteTimeUtc(path) }; }
         catch (DecoderFallbackException) { throw new IOException("无法可靠识别文件编码。请将文件转换为 UTF-8，或在头部声明 % !TeX encoding = GBK。原文件没有改动。"); }
     }
     public void Save()
     {
         if (FilePath is null) throw new InvalidOperationException("请先选择保存位置。");
+        if (string.Equals(FilePath, _savedPath, StringComparison.OrdinalIgnoreCase) && File.Exists(FilePath) && File.GetLastWriteTimeUtc(FilePath) != _savedWriteTime)
+            throw new IOException("文件已被其他程序修改。请另存为保留当前编辑内容，再重新打开原文件检查差异。");
         var content = Encoding.GetPreamble().Concat(Encoding.GetBytes(Document.Text)).ToArray();
         var temporary = FilePath + ".easylatex.tmp";
         try
         {
             File.WriteAllBytes(temporary, content);
             if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null); else File.Move(temporary, FilePath);
-            Document.UndoStack.MarkAsOriginalFile(); IsDirty = false;
+            _forcedDirty = false; Document.UndoStack.MarkAsOriginalFile();
+            _savedPath = FilePath; _savedWriteTime = File.GetLastWriteTimeUtc(FilePath);
             PropertyChanged?.Invoke(this, new(nameof(Title)));
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
-    public void MarkDirty() { IsDirty = true; PropertyChanged?.Invoke(this, new(nameof(Title))); }
+    public void MarkDirty() { _forcedDirty = true; PropertyChanged?.Invoke(this, new(nameof(Title))); }
 }

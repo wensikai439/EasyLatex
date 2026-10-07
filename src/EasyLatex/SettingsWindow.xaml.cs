@@ -17,6 +17,7 @@ public partial class SettingsWindow : Window
         FontSizeSlider.Value = settings.EditorFontSize; AutoCompileCheck.IsChecked = settings.AutoCompile; DarkCheck.IsChecked = settings.DarkMode;
         EngineCombo.ItemsSource = new[] { "自动选择", "XeLaTeX", "pdfLaTeX", "LuaLaTeX", "Tectonic（轻量引擎）" }; EngineCombo.SelectedIndex = (int)settings.Engine;
         CompilerPath.Text = settings.CompilerDirectory; ShellEscapeCheck.IsChecked = settings.AllowShellEscape;
+        OfflineCheck.IsChecked = settings.OfflineBuild;
         EndpointText.Text = settings.AiEndpoint; ModelText.Text = settings.AiModel;
         KeyStatus.Text = string.IsNullOrEmpty(CredentialStore.Read(settings.AiEndpoint)) ? "尚未保存密钥" : "已有密钥，留空可保留";
         RefreshTools();
@@ -37,6 +38,7 @@ public partial class SettingsWindow : Window
             if (!string.IsNullOrWhiteSpace(ApiKeyBox.Password)) CredentialStore.Write(EndpointText.Text.Trim(), ApiKeyBox.Password.Trim());
             _settings.EditorFontSize = FontSizeSlider.Value; _settings.AutoCompile = AutoCompileCheck.IsChecked == true; _settings.DarkMode = DarkCheck.IsChecked == true;
             _settings.Engine = (EngineKind)EngineCombo.SelectedIndex; _settings.CompilerDirectory = CompilerPath.Text.Trim(); _settings.AllowShellEscape = ShellEscapeCheck.IsChecked == true;
+            _settings.OfflineBuild = OfflineCheck.IsChecked == true;
             _settings.AiEndpoint = EndpointText.Text.Trim(); _settings.AiModel = ModelText.Text.Trim(); SettingsStore.Save(_settings);
             DialogResult = true;
         }

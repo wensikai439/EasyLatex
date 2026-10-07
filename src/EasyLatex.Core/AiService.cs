@@ -7,8 +7,9 @@ namespace EasyLatex.Core;
 
 public sealed class AiService
 {
+    private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromMinutes(2) };
     private readonly HttpClient _client;
-    public AiService(HttpClient? client = null) => _client = client ?? new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+    public AiService(HttpClient? client = null) => _client = client ?? DefaultClient;
 
     public static Uri GetEndpoint(string endpoint)
     {

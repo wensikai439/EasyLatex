@@ -18,6 +18,13 @@ if ($Publish) {
     New-Item -ItemType Directory -Force "$output/tools" | Out-Null
     Copy-Item '.tools/tectonic/tectonic.exe' "$output/tools/tectonic.exe"
     Copy-Item 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md' $output
+    New-Item -ItemType Directory -Force "$output/licenses" | Out-Null
+    Copy-Item 'licenses/*.txt' "$output/licenses"
+    $sdkDirectory = Split-Path (Get-Command $sdk).Source -Parent
+    foreach ($notice in @('LICENSE.txt', 'ThirdPartyNotices.txt')) {
+        if (Test-Path (Join-Path $sdkDirectory $notice)) { Copy-Item (Join-Path $sdkDirectory $notice) "$output/licenses/Dotnet-$notice" }
+    }
+    Copy-Item 'examples' $output -Recurse -Force
     Compress-Archive -Path "$output/*" -DestinationPath 'artifacts/EasyLatex-win-x64.zip' -Force
     Get-FileHash 'artifacts/EasyLatex-win-x64.zip' -Algorithm SHA256 | Format-List
 }

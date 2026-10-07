@@ -21,6 +21,7 @@ public sealed class AppSettings
     public string CompilerDirectory { get; set; } = "";
     public bool AutoCompile { get; set; }
     public bool AllowShellEscape { get; set; }
+    public bool OfflineBuild { get; set; }
     public bool DarkMode { get; set; }
     public double EditorFontSize { get; set; } = 15;
     public string AiEndpoint { get; set; } = "https://api.openai.com/v1";

@@ -14,7 +14,8 @@ public static class ProcessRunner
         {
             WorkingDirectory = workingDirectory, UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
+            // Decode per line because Windows TeX tools mix UTF-8 and legacy ACP output.
+            StandardOutputEncoding = Encoding.Latin1, StandardErrorEncoding = Encoding.Latin1
         };
         foreach (var arg in arguments) info.ArgumentList.Add(arg);
         if (environment is not null) foreach (var pair in environment) info.Environment[pair.Key] = pair.Value;
@@ -27,6 +28,9 @@ public static class ProcessRunner
         {
             while (await reader.ReadLineAsync(token) is { } line)
             {
+                var bytes = Encoding.Latin1.GetBytes(line);
+                try { line = new UTF8Encoding(false, true).GetString(bytes); }
+                catch (DecoderFallbackException) { Encoding.RegisterProvider(CodePagesEncodingProvider.Instance); line = Encoding.GetEncoding(0).GetString(bytes); }
                 lock (gate) { if (output.Length < 1_000_000) output.AppendLine(line); }
                 onLine?.Invoke(line);
             }

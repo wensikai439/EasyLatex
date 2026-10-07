@@ -6,6 +6,7 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>EasyLatex</AssemblyName>
+    <ApplicationIcon>Resources/EasyLatex.ico</ApplicationIcon>
     <RootNamespace>EasyLatex</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
@@ -13,5 +14,6 @@
     <ProjectReference Include="../EasyLatex.Core/EasyLatex.Core.csproj" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <Resource Include="Resources/LaTeX.xshd" />
+    <Resource Include="Resources/EasyLatex.png" />
   </ItemGroup>
 </Project>

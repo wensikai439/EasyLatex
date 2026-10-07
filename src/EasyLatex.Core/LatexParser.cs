@@ -33,11 +33,24 @@ public static class LatexParser
         return line;
     }
 
-    public static string ResolveMaster(string filePath, string source)
+    public static string ResolveMaster(string filePath, string source, string? projectRoot = null)
     {
         var m = Regex.Match(source, @"(?im)^\s*%\s*!\s*TeX\s+root\s*=\s*(.+)$");
-        if (!m.Success) return Path.GetFullPath(filePath);
-        return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(filePath)!, m.Groups[1].Value.Trim()));
+        if (m.Success) return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(filePath)!, m.Groups[1].Value.Trim()));
+        if (Regex.IsMatch(string.Join('\n', source.Split('\n').Select(RemoveComment)), @"\\documentclass(?:\[|\{)")) return Path.GetFullPath(filePath);
+        var root = projectRoot ?? Path.GetDirectoryName(filePath)!;
+        var candidates = Directory.Exists(root) ? Directory.GetFiles(root, "*.tex").Where(p => !string.Equals(Path.GetFullPath(p), Path.GetFullPath(filePath), StringComparison.OrdinalIgnoreCase))
+            .Select(p => (Path: p, Text: File.ReadAllText(p))).Where(p => Regex.IsMatch(p.Text, @"(?m)^\s*\\documentclass(?:\[|\{)")).ToList() : [];
+        var references = candidates.Where(c => Regex.Matches(c.Text, @"\\(?:input|include)\s*\{([^}]+)\}").Any(r =>
+        {
+            var path = Path.Combine(Path.GetDirectoryName(c.Path)!, r.Groups[1].Value);
+            if (!Path.HasExtension(path)) path += ".tex";
+            return string.Equals(Path.GetFullPath(path), Path.GetFullPath(filePath), StringComparison.OrdinalIgnoreCase);
+        })).ToList();
+        if (references.Count == 1) return Path.GetFullPath(references[0].Path);
+        if (candidates.Count == 1) return Path.GetFullPath(candidates[0].Path);
+        if (candidates.Count > 1) throw new IOException("项目有多个主文件。请在当前子文件头部指定 % !TeX root = main.tex，再编译。");
+        return Path.GetFullPath(filePath);
     }
 
     public static EngineKind ResolveEngine(string source, EngineKind preference)
@@ -63,6 +76,7 @@ public static class LatexParser
         foreach (var raw in output.Replace("\r", "").Split('\n'))
         {
             var line = raw.Trim();
+            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase)) line = line[6..].Trim();
             var m = FileError.Match(line);
             if (m.Success)
             {

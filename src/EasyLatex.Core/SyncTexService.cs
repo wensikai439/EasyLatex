@@ -62,7 +62,7 @@ public sealed class SyncTexService
     public SyncPoint? Reverse(int page, double x, double y)
     {
         static double Gap(double at, double start, double length) => at < start ? start - at : at > start + length ? at - start - length : 0;
-        return Points.Where(p => p.Page == page && p.Width < 500 && p.Height < 80)
+        return Points.Where(p => p.Page == page && p.Width < 500 && p.Height < 80 && Path.GetExtension(p.FilePath).Equals(".tex", StringComparison.OrdinalIgnoreCase))
             .OrderBy(p => Gap(y, p.Y, p.Height) * 4 + Gap(x, p.X, p.Width)).ThenBy(p => p.Height).FirstOrDefault();
     }
 }

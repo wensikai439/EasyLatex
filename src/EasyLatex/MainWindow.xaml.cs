@@ -51,6 +51,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent(); DataContext = this;
+        Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/EasyLatex;component/Resources/EasyLatex.png"));
         _settings = SettingsStore.Load(); Width = Math.Clamp(_settings.WindowWidth, 960, 2200); Height = Math.Clamp(_settings.WindowHeight, 620, 1600);
         DocumentTabs.ItemsSource = _documents;
         using var reader = XmlReader.Create(Application.GetResourceStream(new Uri("/EasyLatex;component/Resources/LaTeX.xshd", UriKind.Relative))!.Stream);
@@ -72,9 +73,13 @@ public partial class MainWindow : Window
     {
         Editor.FontSize = Math.Clamp(_settings.EditorFontSize, 11, 24); AutoCompile.IsChecked = _settings.AutoCompile;
         var resources = Application.Current.Resources;
-        foreach (var (key, light, dark) in new[] { ("Surface", "#FFFFFF", "#20222B"), ("Canvas", "#F7F7FA", "#191B23"), ("Ink", "#252733", "#E4E5EE"), ("Muted", "#767A8C", "#999FAF"), ("Line", "#E8E8EF", "#353846"), ("Accent", "#6854CC", "#A797F4"), ("AccentSoft", "#EFECFB", "#363044") })
+        foreach (var (key, light, dark) in new[] { ("Surface", "#FFFFFF", "#20222B"), ("Canvas", "#F7F7FA", "#191B23"), ("Ink", "#252733", "#E4E5EE"), ("Muted", "#767A8C", "#999FAF"), ("Line", "#E8E8EF", "#353846"), ("Accent", "#6854CC", "#A797F4"), ("AccentSoft", "#EFECFB", "#363044"), ("PrimaryInk", "#FFFFFF", "#251F40") })
             resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(_settings.DarkMode ? dark : light));
         EngineStatus.Text = _settings.Engine == EngineKind.Auto ? "自动引擎" : _settings.Engine.ToString();
+        foreach (var (name, light, dark) in new[] { ("Comment", "#8B91A3", "#929BAE"), ("Command", "#7657BD", "#BDACF9"), ("Math", "#278C88", "#6ACCC4"), ("Bracket", "#D47B37", "#EBBC86") })
+            if (Editor.SyntaxHighlighting?.GetNamedColor(name) is { } color) color.Foreground = new SimpleHighlightingBrush((Color)ColorConverter.ConvertFromString(_settings.DarkMode ? dark : light));
+        Editor.TextArea.SelectionBrush = (Brush)resources["AccentSoft"]; Editor.TextArea.SelectionForeground = (Brush)resources["Ink"];
+        Editor.TextArea.TextView.Redraw();
         if (CompilerService.Detect(_settings.CompilerDirectory).Count == 0) StatusText.Text = "未发现编译引擎 · 打开设置安装轻量引擎即可开始";
     }
 
@@ -86,6 +91,7 @@ public partial class MainWindow : Window
     {
         if (_folding is not null) { FoldingManager.Uninstall(_folding); _folding = null; }
         _active = document; Editor.Document = document.Document; _folding = FoldingManager.Install(Editor.TextArea);
+        foreach (var tab in _documents) tab.IsActive = tab == document;
         Title = $"{document.Title} — EasyLatex"; UpdateOutline(); UpdateCaret(); UpdateAiScope(); Editor.Focus();
     }
     public void OpenPath(string path)
@@ -95,8 +101,11 @@ public partial class MainWindow : Window
             path = Path.GetFullPath(path);
             var existing = _documents.FirstOrDefault(d => string.Equals(d.FilePath, path, StringComparison.OrdinalIgnoreCase));
             if (existing is not null) { SwitchTo(existing); return; }
-            var document = DocumentSession.Load(path); AddDocument(document);
-            _projectRoot = Path.GetDirectoryName(path); RefreshProject(); AddRecent(path);
+            var document = DocumentSession.Load(path);
+            if (_documents.Count == 1 && _documents[0].FilePath is null && !_documents[0].IsDirty && _documents[0].Document.Text == Templates.Article) _documents.Clear();
+            AddDocument(document);
+            if (_projectRoot is null || !path.StartsWith(_projectRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) _projectRoot = Path.GetDirectoryName(path);
+            RefreshProject(); AddRecent(path);
             StatusText.Text = "已打开 " + Path.GetFileName(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { Notify(ex.Message); }
@@ -205,7 +214,9 @@ public partial class MainWindow : Window
         if (!SaveDocument(_active)) return;
         foreach (var doc in _documents.Where(d => d.IsDirty && d.FilePath is not null).ToList()) if (!SaveDocument(doc)) return;
         var source = _active;
-        var master = LatexParser.ResolveMaster(source.FilePath!, source.Document.Text);
+        string master;
+        try { master = LatexParser.ResolveMaster(source.FilePath!, source.Document.Text, _projectRoot); }
+        catch (IOException ex) { Notify(ex.Message); return; }
         if (!File.Exists(master)) { Notify("主文件不存在：" + master); return; }
         _autoTimer.Stop(); _building = true; _buildCancel = new(); CompileButton.Content = "取消编译"; StatusText.Text = "正在编译…";
         try
@@ -234,7 +245,8 @@ public partial class MainWindow : Window
     {
         _pdfCancel?.Cancel(); _pdfCancel?.Dispose(); _pdfCancel = new(); _pdfGeneration++;
         await _pdf.LoadAsync(path); Pages.Clear(); _renderCache.Clear();
-        for (var i = 0; i < _pdf.PageCount; i++) { var size = _pdf.Size(i); Pages.Add(new() { Index = i, PointWidth = size.Width, PointHeight = size.Height, Width = PageWidth() }); }
+        // WinRT exposes PDF dimensions in 96-DPI DIPs; SyncTeX uses 72-DPI PDF points.
+        for (var i = 0; i < _pdf.PageCount; i++) { var size = _pdf.Size(i); Pages.Add(new() { Index = i, PointWidth = size.Width * 72 / 96, PointHeight = size.Height * 72 / 96, Width = PageWidth() }); }
         PreviewEmpty.Visibility = Visibility.Collapsed; PreviewLabel.Text = $"PDF · {_pdf.PageCount} 页";
         if (Pages.Count > 0) await RenderPageAsync(Pages[0]);
     }

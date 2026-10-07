@@ -13,6 +13,7 @@ using EasyLatex;
 using EasyLatex.Core;
 using EasyLatex.Services;
 using ICSharpCode.AvalonEdit;
+using EasyLatex.Models;
 
 internal static class Program
 {
@@ -29,7 +30,7 @@ internal static class Program
         var app = new App(); app.InitializeComponent();
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { if (!args.Contains("--ui-only")) await CoreChecks(); if (args.Contains("--ui") || args.Contains("--ui-only")) await UiChecks(); }
+            try { if (!args.Contains("--ui-only")) await CoreChecks(args.Contains("--unit-only")); if (args.Contains("--ui") || args.Contains("--ui-only")) await UiChecks(); }
             catch (Exception ex) { Fail("harness", ex.ToString()); }
             finally
             {
@@ -54,7 +55,7 @@ internal static class Program
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => responder(request);
     }
-    private static async Task CoreChecks()
+    private static async Task CoreChecks(bool unitOnly = false)
     {
         Check("outline-comments-and-depth", LatexParser.GetOutline("% \\section{hidden}\n\\section{A}\n\\subsection{B}\n\\subsubsection*{C}").SequenceEqual(new[] { new OutlineEntry("A", 2, 0), new OutlineEntry("B", 3, 1), new OutlineEntry("C", 4, 2) }));
         Check("escaped-percent", LatexParser.RemoveComment("50\\% yes % hidden") == "50\\% yes ");
@@ -82,6 +83,15 @@ internal static class Program
         });
         var suggestion = await new AiService(new HttpClient(handler)).SuggestAsync(new() { AiModel = "test-model" }, "test-key", "\\textbf{test", "修复", "Missing }", default);
         Check("ai-response-parsing", AiService.ValidateAndApply("\\textbf{test", suggestion) == "\\textbf{test}");
+        var encodingFile = Path.Combine(Root, "legacy.tex");
+        var legacy = "% !TeX encoding = GBK\n中文内容";
+        await File.WriteAllBytesAsync(encodingFile, Encoding.GetEncoding("GBK").GetBytes(legacy));
+        var document = DocumentSession.Load(encodingFile); Check("editor-legacy-decode", document.Document.Text == legacy);
+        document.Document.Insert(document.Document.TextLength, "\n修改"); Check("editor-first-change-dirty", document.IsDirty);
+        document.Document.UndoStack.Undo(); Check("editor-undo-to-original", !document.IsDirty && document.Document.Text == legacy);
+        document.Save(); Check("editor-preserves-encoding", (await File.ReadAllBytesAsync(encodingFile)).SequenceEqual(Encoding.GetEncoding("GBK").GetBytes(legacy)));
+        await File.WriteAllTextAsync(encodingFile, "external change");
+        try { document.Save(); Fail("editor-protect-external-change", "overwrote"); } catch (IOException) { Check("editor-protect-external-change", File.ReadAllText(encodingFile) == "external change"); }
 
         using (var cancel = new CancellationTokenSource(500))
         {
@@ -90,6 +100,7 @@ internal static class Program
             catch (OperationCanceledException) { Check("process-cancel-kills", start.Elapsed < TimeSpan.FromSeconds(4)); }
         }
 
+        if (unitOnly) return;
         var directory = Path.Combine(Root, "中文 project with spaces"); Directory.CreateDirectory(directory);
         var english = Path.Combine(directory, "main.tex"); await File.WriteAllTextAsync(english, Templates.Article);
         var settings = new AppSettings { Engine = EngineKind.XeLaTeX };
@@ -114,9 +125,17 @@ internal static class Program
         await File.WriteAllTextAsync(multi, "\\documentclass{article}\n\\begin{document}\n\\input{chapter}\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}");
         var m = await compiler.BuildAsync(multi, settings, null, default); await File.WriteAllTextAsync(Path.Combine(Root, "multi-build.log"), m.Output);
         Check("compile-multi-file-bibliography", m.Success && File.Exists(Path.Combine(directory, ".easylatex", "build", "multi.bbl")), m.Output[^Math.Min(m.Output.Length, 1000)..]);
+        Check("master-infer-referenced-child", LatexParser.ResolveMaster(Path.Combine(directory, "chapter.tex"), File.ReadAllText(Path.Combine(directory, "chapter.tex")), directory) == multi);
+        var beamer = Path.Combine(directory, "slides.tex"); await File.WriteAllTextAsync(beamer, Templates.Beamer);
+        var slides = await compiler.BuildAsync(beamer, settings, null, default); await File.WriteAllTextAsync(Path.Combine(Root, "beamer-build.log"), slides.Output);
+        Check("compile-beamer", slides.Success);
+        var biberFile = Path.Combine(directory, "biber-test.tex"); await File.WriteAllTextAsync(biberFile, "\\documentclass{article}\n\\usepackage[backend=biber]{biblatex}\n\\addbibresource{refs.bib}\n\\begin{document}\nA reference \\cite{knuth1984}.\n\\printbibliography\n\\end{document}");
+        var biber = await compiler.BuildAsync(biberFile, settings, null, default); await File.WriteAllTextAsync(Path.Combine(Root, "biber-build.log"), biber.Output);
+        Check("compile-biber", biber.Success && File.Exists(Path.Combine(directory, ".easylatex", "build", "biber-test.bbl")), biber.Output[^Math.Min(biber.Output.Length, 1000)..]);
         await File.WriteAllTextAsync(english, Templates.Article.Replace("Every good paper", "\\unknowncommand Every good paper"));
         var broken = await compiler.BuildAsync(english, settings, null, default); await File.WriteAllTextAsync(Path.Combine(Root, "broken-build.log"), broken.Output);
         Check("compile-errors-not-stale-success", !broken.Success && broken.PdfPath is null && broken.Diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error && d.Line > 0));
+        Check("compile-errors-real-unicode-file", broken.Diagnostics.Any(d => d.Line > 0 && File.Exists(d.FilePath)), JsonSerializer.Serialize(broken.Diagnostics));
         await File.WriteAllTextAsync(english, Templates.Article);
         if (CompilerService.FindTool("tectonic", Path.GetFullPath(".tools/tectonic")) is { } tectonic)
         {
@@ -130,6 +149,8 @@ internal static class Program
 
     private static async Task UiChecks()
     {
+        using var server = new MockApiServer();
+        SettingsStore.Save(new() { AiEndpoint = server.Endpoint, AiModel = "mock-model" });
         var window = new MainWindow { WindowStartupLocation = WindowStartupLocation.Manual, Left = -5000, Top = -5000, ShowInTaskbar = false };
         window.Show(); await Task.Delay(200);
         var file = Path.Combine(Root, "中文 project with spaces", "main.tex");
@@ -143,6 +164,11 @@ internal static class Program
         Check("ui-save-build-preview", window.Pages.Count > 0 && window.Pages[0].Image is not null && File.ReadAllText(file).Contains("UI verification"));
         await Task.Delay(500);
         Capture(window, "main-light.png");
+        var data = EasyLatex.Services.SettingsStore.Load(); data.DarkMode = true;
+        typeof(MainWindow).GetField("_settings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(window, data);
+        typeof(MainWindow).GetMethod("ApplySettings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, null);
+        await Task.Delay(200); Capture(window, "main-dark.png");
+        data.DarkMode = false; typeof(MainWindow).GetMethod("ApplySettings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, null);
         window.Width = 1024; window.Height = 700; await Task.Delay(300); Capture(window, "main-compact.png");
         var ai = (Border)window.FindName("AiPanel"); ai.Visibility = Visibility.Visible; await Task.Delay(200); Capture(window, "ai-panel.png"); ai.Visibility = Visibility.Collapsed;
         var settings = new SettingsWindow(new()) { Owner = window, WindowStartupLocation = WindowStartupLocation.Manual, Left = -5000, Top = -5000, ShowInTaskbar = false };
@@ -153,13 +179,48 @@ internal static class Program
         Capture(window, "compile-error.png");
         editor.Document.UndoStack.Undo(); await window.CompileAsync();
         Check("ui-undo-recompile", ((TextBlock)window.FindName("StatusText")).Text.StartsWith("编译完成"));
+        var aiSend = (Button)window.FindName("AiSendButton"); var aiApply = (Button)window.FindName("AiApplyButton"); var aiStatus = (TextBlock)window.FindName("AiStatus");
+        var selected = server.Old; editor.Select(editor.Text.IndexOf(selected, StringComparison.Ordinal), selected.Length);
+        ai.Visibility = Visibility.Visible; aiSend.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Until(() => aiSend.IsEnabled);
+        Check("ui-ai-reviews-before-edit", editor.Text.Contains(selected) && aiApply.Visibility == Visibility.Visible && server.LastPayload.Contains("mock-model"));
+        Capture(window, "ai-proposal.png"); aiApply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Until(() => aiStatus.Text.Contains("编译完成"), 40_000);
+        Check("ui-ai-apply-and-verify", editor.Text.Contains(server.New) && File.ReadAllText(file).Contains(server.New));
+        editor.Document.UndoStack.Undo(); await window.CompileAsync(); Check("ui-ai-undo", editor.Text.Contains(selected));
+        editor.Select(editor.Text.IndexOf(selected, StringComparison.Ordinal), selected.Length);
+        aiSend.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Until(() => aiSend.IsEnabled);
+        editor.Document.Insert(editor.Text.IndexOf(selected, StringComparison.Ordinal) + 3, "X");
+        var changed = editor.Text; aiApply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check("ui-ai-reject-stale-source", editor.Text == changed && aiStatus.Text.Contains("已经变化"));
+        editor.Document.UndoStack.Undo(); await window.CompileAsync();
+        server.DelayMilliseconds = 5000; aiSend.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Task.Delay(150);
+        ((Button)window.FindName("AiCancelButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Until(() => aiSend.IsEnabled);
+        Check("ui-ai-cancel", aiStatus.Text.Contains("请求已取消") && editor.Text.Contains(selected));
+        server.DelayMilliseconds = 0; server.StatusCode = 401;
+        aiSend.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Until(() => aiSend.IsEnabled);
+        Check("ui-ai-error-response", aiStatus.Text.Contains("401") && editor.Text.Contains(selected));
+        ai.Visibility = Visibility.Collapsed;
+        ((CheckBox)window.FindName("AutoCompile")).IsChecked = true;
+        editor.Document.Insert(editor.Text.Length, "\n% auto-compile verified\n");
+        await Until(() => File.ReadAllText(file).Contains("auto-compile verified") && ((TextBlock)window.FindName("StatusText")).Text.StartsWith("编译完成"), 40_000);
+        Check("ui-auto-save-compile", File.ReadAllText(file).Contains("auto-compile verified"));
+        ((CheckBox)window.FindName("AutoCompile")).IsChecked = false;
+        CredentialStore.Write(server.Endpoint, "known-test-key");
+        try { Check("credential-native-roundtrip", CredentialStore.Read(server.Endpoint) == "known-test-key"); Check("credential-provider-isolation", CredentialStore.Read(server.Endpoint + "/other") == ""); }
+        finally { CredentialStore.Delete(server.Endpoint); }
         Console.WriteLine("PDF_NATIVE_SIZE " + window.Pages[0].PointWidth + "x" + window.Pages[0].PointHeight);
         window.Close();
+    }
+    private static async Task Until(Func<bool> ready, int timeout = 12_000)
+    {
+        var watch = Stopwatch.StartNew();
+        while (!ready()) { if (watch.ElapsedMilliseconds > timeout) throw new TimeoutException("UI operation did not complete"); await Task.Delay(30); }
     }
     private static void Capture(Window window, string name)
     {
         var element = (FrameworkElement)window.Content; element.UpdateLayout();
-        var image = new RenderTargetBitmap((int)element.ActualWidth, (int)element.ActualHeight, 96, 96, PixelFormats.Pbgra32); image.Render(element);
+        var dpi = VisualTreeHelper.GetDpi(element);
+        var image = new RenderTargetBitmap((int)(element.ActualWidth * dpi.DpiScaleX), (int)(element.ActualHeight * dpi.DpiScaleY), 96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32); image.Render(element);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using var output = File.Create(Path.Combine(Root, name)); encoder.Save(output);
         Check("render-" + name, image.PixelWidth > 400 && output.Length > 10000);
     }
