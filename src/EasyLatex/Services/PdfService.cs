@@ -10,6 +10,7 @@ public sealed class PdfService : IDisposable
 {
     private PdfDocument? _document;
     private InMemoryRandomAccessStream? _source;
+    private byte[]? _bytes;
     private readonly SemaphoreSlim _renderGate = new(1);
     public uint PageCount => _document?.PageCount ?? 0;
     public string? Path { get; private set; }
@@ -21,7 +22,7 @@ public sealed class PdfService : IDisposable
         stream.Seek(0);
         var document = await PdfDocument.LoadFromStreamAsync(stream);
         await _renderGate.WaitAsync();
-        try { _document = document; _source?.Dispose(); _source = stream; Path = path; }
+        try { _document = document; _source?.Dispose(); _source = stream; _bytes = bytes; Path = path; }
         finally { _renderGate.Release(); }
     }
     public (double Width, double Height) Size(int index)
@@ -29,6 +30,7 @@ public sealed class PdfService : IDisposable
         using var page = _document!.GetPage((uint)index);
         return (page.Size.Width, page.Size.Height);
     }
+    public Task ExportAsync(string path) => File.WriteAllBytesAsync(path, _bytes ?? throw new InvalidOperationException("请先成功编译文档，再导出 PDF。"));
     public async Task<BitmapSource?> RenderAsync(int index, double width, CancellationToken token)
     {
         await _renderGate.WaitAsync(token);
@@ -38,9 +40,10 @@ public sealed class PdfService : IDisposable
             using var page = _document.GetPage((uint)index);
             using var stream = new InMemoryRandomAccessStream();
             var renderWidth = (uint)Math.Clamp(width, 200, 2400);
-            await page.RenderToStreamAsync(stream, new PdfPageRenderOptions { DestinationWidth = renderWidth, DestinationHeight = (uint)(renderWidth * page.Size.Height / page.Size.Width) }).AsTask(token);
+            await page.RenderToStreamAsync(stream, new PdfPageRenderOptions { DestinationWidth = renderWidth }).AsTask(token);
             token.ThrowIfCancellationRequested();
-            var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.StreamSource = stream.AsStreamForRead(); bitmap.EndInit(); bitmap.Freeze();
+            // WinRT's destination is in DIPs; normalize the bitmap to our pixel cache size.
+            var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = (int)renderWidth; bitmap.StreamSource = stream.AsStreamForRead(); bitmap.EndInit(); bitmap.Freeze();
             return bitmap;
         }
         finally { _renderGate.Release(); }

@@ -10,7 +10,7 @@ namespace EasyLatex;
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
-    private bool _deleteKey;
+    private string? _keyToDelete;
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent(); _settings = settings;
@@ -20,6 +20,7 @@ public partial class SettingsWindow : Window
         OfflineCheck.IsChecked = settings.OfflineBuild;
         EndpointText.Text = settings.AiEndpoint; ModelText.Text = settings.AiModel;
         KeyStatus.Text = string.IsNullOrEmpty(CredentialStore.Read(settings.AiEndpoint)) ? "尚未保存密钥" : "已有密钥，留空可保留";
+        EndpointText.TextChanged += (_, _) => KeyStatus.Text = string.IsNullOrEmpty(CredentialStore.Read(EndpointText.Text)) ? "当前地址尚未保存密钥" : "当前地址已有密钥，留空可保留";
         RefreshTools();
     }
     private void RefreshTools() => DetectedTools.Text = "已检测：" + string.Join("、", CompilerService.Detect(CompilerPath.Text).Select(t => t.Label));
@@ -28,13 +29,13 @@ public partial class SettingsWindow : Window
         var dialog = new OpenFolderDialog { Title = "选择包含 xelatex.exe 等工具的文件夹" };
         if (dialog.ShowDialog(this) == true) { CompilerPath.Text = dialog.FolderName; RefreshTools(); }
     }
-    private void DeleteKey_Click(object sender, RoutedEventArgs e) { _deleteKey = true; ApiKeyBox.Clear(); KeyStatus.Text = "保存设置时将删除密钥"; }
+    private void DeleteKey_Click(object sender, RoutedEventArgs e) { _keyToDelete = EndpointText.Text.Trim(); ApiKeyBox.Clear(); KeyStatus.Text = "保存设置时将删除此地址的密钥"; }
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             if (!string.IsNullOrWhiteSpace(ModelText.Text)) AiService.GetEndpoint(EndpointText.Text);
-            if (_deleteKey) CredentialStore.Delete(_settings.AiEndpoint);
+            if (_keyToDelete is not null) CredentialStore.Delete(_keyToDelete);
             if (!string.IsNullOrWhiteSpace(ApiKeyBox.Password)) CredentialStore.Write(EndpointText.Text.Trim(), ApiKeyBox.Password.Trim());
             _settings.EditorFontSize = FontSizeSlider.Value; _settings.AutoCompile = AutoCompileCheck.IsChecked == true; _settings.DarkMode = DarkCheck.IsChecked == true;
             _settings.Engine = (EngineKind)EngineCombo.SelectedIndex; _settings.CompilerDirectory = CompilerPath.Text.Trim(); _settings.AllowShellEscape = ShellEscapeCheck.IsChecked == true;

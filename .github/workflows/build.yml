@@ -21,12 +21,17 @@ jobs:
         run: dotnet run --project tests/EasyLatex.Tests -c Release --no-build -- artifacts/unit-verification --unit-only
       - name: Fetch verified compiler
         shell: pwsh
-        run: ./scripts/bootstrap.ps1
+        run: ./scripts/bootstrap.ps1 -WarmCache
       - name: Publish self-contained portable app
         shell: pwsh
         run: ./scripts/build.ps1 -Publish
+      - name: Verify published app with empty cache and blocked network
+        shell: pwsh
+        run: ./scripts/verify-portable.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: EasyLatex-win-x64
-          path: artifacts/EasyLatex-win-x64.zip
+          path: |
+            artifacts/EasyLatex-win-x64.zip
+            artifacts/SHA256SUMS.txt
           retention-days: 14

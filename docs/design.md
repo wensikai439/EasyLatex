@@ -20,6 +20,10 @@
 
 AI：兼容 OpenAI Chat Completions 的 API，可配置根地址/模型/密钥，本机模型也可接入。用户主动发送选区或当前文件和错误；显示发送范围；返回可核对修改；唯一定位与重叠校验；用户应用后重新编译；撤销。密钥存 Windows 凭据管理器，不入设置文件、日志、Git 或诊断包。
 
+API 参数以 [Chat Completions 官方文档](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) 为依据：现代 OpenAI 模型采用 `max_completion_tokens`，常见旧式兼容接口保留 `max_tokens`；不强制温度参数，避免推理模型拒绝请求。不会在错误时自动重发收费请求。
+
+发行包携带模板预热缓存。打包前核对模板源码哈希与引擎版本，并实际以 `--only-cached` 编译三个模板，避免仅凭缓存文件夹存在就声称离线可用。
+
 ## 参考与边界
 
 - TeXMini（MIT，Objective-C）：清爽布局和本地工作流 https://github.com/codesun981/TeXMini

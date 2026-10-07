@@ -52,6 +52,8 @@ public sealed class CompilerService
             int exit;
             if (tool.Kind == EngineKind.Tectonic)
             {
+                progress?.Invoke("Preparing cached compiler resources");
+                await CompilerCache.SeedAsync(token);
                 var args = new List<string> { "-X", "compile", "--synctex", "--keep-logs", "--keep-intermediates", "--outdir", buildDir };
                 if (!settings.AllowShellEscape) args.Add("--untrusted");
                 if (settings.OfflineBuild) args.Add("--only-cached");
@@ -68,7 +70,7 @@ public sealed class CompilerService
                 var flag = tool.Kind switch { EngineKind.XeLaTeX => "-pdfxe", EngineKind.LuaLaTeX => "-pdflua", _ => "-pdf" };
                 var r = await ProcessRunner.RunAsync(latexmk,
                     ["-norc", flag, "-interaction=nonstopmode", "-file-line-error", "-synctex=1", settings.AllowShellEscape ? "-shell-escape" : "-latexoption=-no-shell-escape", "-outdir=" + buildDir, masterFile], directory, progress, token,
-                    new Dictionary<string, string> { ["PATH"] = Path.GetDirectoryName(tool.Path) + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH") });
+                    new Dictionary<string, string> { ["PATH"] = Path.GetDirectoryName(tool.Path) + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"), ["max_print_line"] = "1000" });
                 output.Append(r.Output); exit = r.ExitCode;
             }
             else
@@ -77,7 +79,7 @@ public sealed class CompilerService
                 for (var pass = 0; pass < 3; pass++)
                 {
                     var r = await ProcessRunner.RunAsync(tool.Path,
-                        ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "-synctex=1", settings.AllowShellEscape ? "-shell-escape" : "-no-shell-escape", "-output-directory=" + buildDir, masterFile], directory, progress, token);
+                        ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "-synctex=1", settings.AllowShellEscape ? "-shell-escape" : "-no-shell-escape", "-output-directory=" + buildDir, masterFile], directory, progress, token, new Dictionary<string, string> { ["max_print_line"] = "1000" });
                     output.Append(r.Output); exit = r.ExitCode;
                     if (exit != 0) break;
                     if (pass == 0)

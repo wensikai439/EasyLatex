@@ -5,7 +5,7 @@ namespace EasyLatex.Core;
 public static class LatexParser
 {
     private static readonly Regex Sections = new(@"^\s*\\(?<kind>part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{(?<title>.*)\}", RegexOptions.Compiled);
-    private static readonly Regex FileError = new(@"^(?<file>.+\.(?:tex|sty|cls|bib)):(?<line>\d+):\s*(?<message>.+)$", RegexOptions.Compiled);
+    private static readonly Regex FileError = new(@"^(?<file>.+\.(?:tex|sty|cls|bib)):(?<line>\d+):\s*(?<message>.*)$", RegexOptions.Compiled);
     private static readonly Regex LogLine = new(@"^l\.(?<line>\d+)\s*(?<code>.*)$", RegexOptions.Compiled);
     public static IReadOnlyList<OutlineEntry> GetOutline(string source)
     {
@@ -73,21 +73,31 @@ public static class LatexParser
         var items = new List<Diagnostic>();
         string? pendingError = null;
         string? pendingWarning = null;
+        (string Path, int Line, DiagnosticSeverity Severity)? pendingLocation = null;
         foreach (var raw in output.Replace("\r", "").Split('\n'))
         {
             var line = raw.Trim();
-            if (line.StartsWith("error:", StringComparison.OrdinalIgnoreCase)) line = line[6..].Trim();
+            if (pendingLocation is { } location && line.Length > 0)
+            {
+                items.Add(new(location.Severity, line, location.Path, location.Line)); pendingLocation = null; continue;
+            }
+            var prefixedError = line.StartsWith("error:", StringComparison.OrdinalIgnoreCase);
+            var prefixedWarning = line.StartsWith("warning:", StringComparison.OrdinalIgnoreCase);
+            if (prefixedError) line = line[6..].Trim();
+            if (prefixedWarning) line = line[8..].Trim();
             var m = FileError.Match(line);
             if (m.Success)
             {
                 var path = m.Groups["file"].Value;
                 if (!Path.IsPathRooted(path)) path = Path.Combine(Path.GetDirectoryName(mainFile)!, path);
                 var message = m.Groups["message"].Value;
-                items.Add(new(message.Contains("Warning", StringComparison.OrdinalIgnoreCase) ? DiagnosticSeverity.Warning : DiagnosticSeverity.Error,
-                    message, Path.GetFullPath(path), int.Parse(m.Groups["line"].Value)));
+                var severity = prefixedWarning || message.Contains("Warning", StringComparison.OrdinalIgnoreCase) ? DiagnosticSeverity.Warning : DiagnosticSeverity.Error;
+                if (message.Length == 0) pendingLocation = (Path.GetFullPath(path), int.Parse(m.Groups["line"].Value), severity);
+                else items.Add(new(severity, message, Path.GetFullPath(path), int.Parse(m.Groups["line"].Value)));
                 pendingError = null;
                 continue;
             }
+            if (prefixedError || prefixedWarning) { items.Add(new(prefixedError ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning, line, mainFile)); continue; }
             if (line.StartsWith("! ")) { pendingError = line[2..]; continue; }
             var lm = LogLine.Match(line);
             if (lm.Success && pendingError is not null)

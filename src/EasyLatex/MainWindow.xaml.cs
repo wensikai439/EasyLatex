@@ -39,10 +39,12 @@ public partial class MainWindow : Window
     private string? _projectRoot;
     private string _lastLog = "";
     private bool _initialized, _building, _focus, _pendingAuto;
+    private bool _verificationMode;
+    internal void EnableVerificationMode() => _verificationMode = true;
     private double _zoom = 1;
     private bool _fitWidth = true;
     private int _pdfGeneration;
-    private readonly HashSet<PdfPageModel> _rendering = [];
+    private readonly Dictionary<PdfPageModel, Task> _rendering = [];
     private readonly Queue<PdfPageModel> _renderCache = new();
     private (DocumentSession Doc, string Source, int Offset, string Result)? _proposal;
     private record ProjectFile(string Path, string Label);
@@ -58,7 +60,13 @@ public partial class MainWindow : Window
         Editor.SyntaxHighlighting = HighlightingLoader.Load(reader, HighlightingManager.Instance);
         Editor.Options.ConvertTabsToSpaces = true; Editor.Options.IndentationSize = 2; Editor.Options.EnableHyperlinks = false; Editor.Options.EnableEmailHyperlinks = false;
         Editor.TextArea.TextEntered += Editor_TextEntered;
+        Editor.TextArea.TextEntering += (_, e) =>
+        {
+            if (e.Text == "}" && Editor.SelectionLength == 0 && Editor.CaretOffset < Editor.Document.TextLength && Editor.Document.GetCharAt(Editor.CaretOffset) == '}')
+            { Editor.CaretOffset++; e.Handled = true; }
+        };
         Editor.TextArea.Caret.PositionChanged += (_, _) => UpdateCaret();
+        Editor.TextArea.SelectionChanged += (_, _) => UpdateAiScope();
         _analysisTimer.Tick += (_, _) => { _analysisTimer.Stop(); UpdateOutline(); };
         _autoTimer.Tick += async (_, _) => { _autoTimer.Stop(); if (_building) _pendingAuto = true; else if (_settings.AutoCompile && _active?.FilePath is not null) await CompileAsync(); };
         _recoveryTimer.Tick += (_, _) => WriteRecovery();
@@ -252,25 +260,38 @@ public partial class MainWindow : Window
     }
     private double PageWidth() => _fitWidth ? Math.Max(220, PdfPages.ActualWidth - 48) : 595 * _zoom;
     private async void PdfPage_Loaded(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is PdfPageModel page) await RenderPageAsync(page); }
+    private async void PdfPage_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e) { if (e.NewValue is PdfPageModel page) await RenderPageAsync(page); }
     private async Task RenderPageAsync(PdfPageModel page)
     {
-        if (page.Image is not null || !_rendering.Add(page) || _pdfCancel is null) return;
-        var generation = _pdfGeneration; var token = _pdfCancel.Token;
+        if (page.Image is not null || _pdfCancel is null) return;
+        if (_rendering.TryGetValue(page, out var pending)) { await pending; return; }
+        var task = RenderPageCoreAsync(page, _pdfGeneration, _pdfCancel.Token);
+        _rendering[page] = task;
+        try { await task; } finally { _rendering.Remove(page); }
+    }
+    private async Task RenderPageCoreAsync(PdfPageModel page, int generation, CancellationToken token)
+    {
         try
         {
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-            var image = await _pdf.RenderAsync(page.Index, page.Width * dpi, token);
-            if (generation != _pdfGeneration || token.IsCancellationRequested) return;
-            page.Image = image; _renderCache.Enqueue(page);
-            while (_renderCache.Count > 8) { var old = _renderCache.Dequeue(); if (old != page) old.Image = null; }
+            while (generation == _pdfGeneration && !token.IsCancellationRequested && Pages.Contains(page))
+            {
+                var requestedWidth = page.Width * dpi;
+                var image = await _pdf.RenderAsync(page.Index, requestedWidth, token);
+                if (generation != _pdfGeneration || token.IsCancellationRequested || image is null) return;
+                if (Math.Abs(requestedWidth - page.Width * dpi) > 0.5) continue;
+                page.Image = image; _renderCache.Enqueue(page);
+                while (_renderCache.Count > 8) { var old = _renderCache.Dequeue(); if (old != page) old.Image = null; }
+                return;
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { StatusText.Text = "PDF 预览暂未完成：" + ex.Message; }
-        finally { _rendering.Remove(page); }
     }
     private void Pdf_SizeChanged(object sender, SizeChangedEventArgs e) { if (_fitWidth && _initialized) UpdatePageWidths(); }
     private void UpdatePageWidths()
     {
+        _renderCache.Clear();
         foreach (var page in Pages) { page.Width = PageWidth(); page.Image = null; }
         ZoomLabel.Content = _fitWidth ? "适合宽度" : $"{_zoom:P0}";
         foreach (var page in Pages)
@@ -299,14 +320,21 @@ public partial class MainWindow : Window
         var point = _syncTex.Forward(_active.FilePath, Editor.TextArea.Caret.Line);
         if (point is null || point.Page > Pages.Count) { StatusText.Text = "请先编译，再使用源码与 PDF 定位"; return; }
         var page = Pages[point.Page - 1]; PdfPages.ScrollIntoView(page); PdfPages.SelectedItem = page; StatusText.Text = $"已定位到 PDF 第 {point.Page} 页";
+        foreach (var other in Pages) other.Mark(other == page ? point : null);
+        PdfPages.UpdateLayout();
+        if (PdfPages.ItemContainerGenerator.ContainerFromItem(page) is FrameworkElement item && FindDescendant<ScrollViewer>(PdfPages) is { } scroll)
+        {
+            var at = item.TranslatePoint(new Point(0, 0), PdfPages);
+            scroll.ScrollToVerticalOffset(Math.Max(0, scroll.VerticalOffset + at.Y + page.MarkerTop + 12 - scroll.ViewportHeight * 0.35));
+        }
     }
-    private void Export_Click(object sender, RoutedEventArgs e)
+    private async void Export_Click(object sender, RoutedEventArgs e)
     {
         if (_pdf.Path is null) { StatusText.Text = "请先成功编译文档，再导出 PDF"; return; }
         var dialog = new SaveFileDialog { Filter = "PDF 文档|*.pdf", FileName = Path.GetFileName(_pdf.Path) };
         if (dialog.ShowDialog(this) != true) return;
-        try { if (!string.Equals(dialog.FileName, _pdf.Path, StringComparison.OrdinalIgnoreCase)) File.Copy(_pdf.Path, dialog.FileName, true); StatusText.Text = "PDF 已导出"; }
-        catch (IOException ex) { Notify(ex.Message); }
+        try { await _pdf.ExportAsync(dialog.FileName); StatusText.Text = "PDF 已导出"; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Notify(ex.Message); }
     }
     private void Diagnostic_DoubleClick(object sender, MouseButtonEventArgs e)
     {
@@ -334,6 +362,7 @@ public partial class MainWindow : Window
         var text = Editor.SelectionLength > 0 ? Editor.SelectedText : doc.Document.Text;
         _aiCancel = new(); AiSendButton.IsEnabled = false; AiCancelButton.Visibility = Visibility.Visible; AiApplyButton.Visibility = Visibility.Collapsed;
         AiStatus.Text = "正在请求 AI…"; AiExplanation.Text = ""; _proposal = null;
+        AiBefore.Visibility = AiAfter.Visibility = AiBeforeLabel.Visibility = AiAfterLabel.Visibility = Visibility.Collapsed;
         try
         {
             var diagnostics = string.Join("\n", (DiagnosticsList.ItemsSource as IReadOnlyList<Diagnostic> ?? []).Select(d => $"{Path.GetFileName(d.FilePath)}:{d.Line}: {d.Message}"));
@@ -347,7 +376,9 @@ public partial class MainWindow : Window
                 AiBefore.Visibility = AiAfter.Visibility = AiBeforeLabel.Visibility = AiAfterLabel.Visibility = AiApplyButton.Visibility = Visibility.Visible;
             }
         }
-        catch (OperationCanceledException) { AiStatus.Text = "请求已取消，源码没有改动。"; }
+        catch (OperationCanceledException) when (_aiCancel.IsCancellationRequested) { AiStatus.Text = "请求已取消，源码没有改动。"; }
+        catch (OperationCanceledException) { AiStatus.Text = "AI 服务响应超时，源码没有改动。请缩小选区或稍后重试。"; }
+        catch (JsonException) { AiStatus.Text = "AI 返回的修改格式无法解析，源码没有改动。请重新发送或换一个模型。"; }
         catch (Exception ex) { AiStatus.Text = ex.Message; }
         finally { _aiCancel.Dispose(); _aiCancel = null; AiSendButton.IsEnabled = true; AiCancelButton.Visibility = Visibility.Collapsed; }
     }
@@ -403,16 +434,22 @@ public partial class MainWindow : Window
 
     private void Editor_TextEntered(object? sender, System.Windows.Input.TextCompositionEventArgs e)
     {
+        var currentLine = Editor.Document.GetLineByOffset(Editor.CaretOffset);
+        var prefix = Editor.Document.GetText(currentLine.Offset, Editor.CaretOffset - currentLine.Offset);
+        if (LatexParser.RemoveComment(prefix).Length < prefix.Length) return;
         if (e.Text == "\\")
         {
             var commands = new[] { "section", "subsection", "subsubsection", "chapter", "textbf", "textit", "emph", "label", "ref", "eqref", "cite", "includegraphics", "input", "include", "usepackage", "documentclass", "frac", "sqrt", "sum", "int", "alpha", "beta", "gamma", "theta", "lambda", "pi", "infty", "times", "cdot", "left", "right" };
-            var items = commands.Select(c => new CompletionItem(c, c + "{${cursor}}", "LaTeX 命令")).ToList();
+            var items = commands.Select(c => new CompletionItem(c, CommandSnippet(c), "LaTeX 命令")).ToList();
             foreach (var env in new[] { "equation", "align", "itemize", "enumerate", "figure", "table", "abstract" }) items.Add(new("begin{" + env + "}", "begin{" + env + "}\n  ${cursor}\n\\end{" + env + "}", "插入完整环境"));
             ShowCompletions(items);
         }
         else if (e.Text == "{")
         {
             var offset = Editor.CaretOffset; var before = Editor.Document.GetText(0, offset);
+            var backslashes = 0;
+            for (var i = offset - 2; i >= 0 && Editor.Document.GetCharAt(i) == '\\'; i--) backslashes++;
+            if (backslashes % 2 == 1) return;
             if (offset >= Editor.Document.TextLength || Editor.Document.GetCharAt(offset) != '}') { Editor.Document.Insert(offset, "}"); Editor.CaretOffset = offset; }
             if (Regex.IsMatch(before, @"\\(?:eqref|ref|pageref|autoref)\{$")) ShowCompletions(LatexParser.GetReferenceKeys(Editor.Text).Select(c => new CompletionItem(c)));
             else if (Regex.IsMatch(before, @"\\(?:cite|citep|citet|parencite|textcite)\{$"))
@@ -423,6 +460,15 @@ public partial class MainWindow : Window
             }
         }
     }
+    internal static string CommandSnippet(string command) => command switch
+    {
+        "frac" => "frac{${cursor}}{}",
+        "left" => "left(${cursor}\\right)",
+        "right" => "right)",
+        "sum" or "int" => command + "_{${cursor}}^{}",
+        "alpha" or "beta" or "gamma" or "theta" or "lambda" or "pi" or "infty" or "times" or "cdot" => command + "${cursor}",
+        _ => command + "{${cursor}}"
+    };
     private void ShowCompletions(IEnumerable<CompletionItem> items)
     {
         var list = items.ToList(); if (list.Count == 0) return;
@@ -463,33 +509,45 @@ public partial class MainWindow : Window
     private void Shortcuts_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "Ctrl+N  新建\nCtrl+O  打开\nCtrl+S  保存\nCtrl+Shift+S  另存为\nCtrl+Enter  保存并编译 / 取消编译\nCtrl+F / Ctrl+H  查找 / 替换\nCtrl+/  注释 / 取消注释\nCtrl+J  定位 PDF\nCtrl+点击 PDF  定位源码\nCtrl+滚轮  缩放 PDF\nF11  专注写作\nCtrl+Z  撤销（包括 AI 修改）", "EasyLatex 快捷键");
     private void About_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, "EasyLatex 0.1.0\n一个轻量 LaTeX 一键使用编译器。\n\nWindows 原生界面 · 本地写作 · 可选 API AI 助手\n基于 AvalonEdit，使用 Windows 原生 PDF 渲染。\nMIT 开源。", "关于 EasyLatex");
     private void Window_Drop(object sender, DragEventArgs e) { if (e.Data.GetData(DataFormats.FileDrop) is string[] files) foreach (var file in files.Where(File.Exists)) OpenPath(file); }
-    private void Notify(string message) { StatusText.Text = message; MessageBox.Show(this, message, "EasyLatex", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    private void Notify(string message) { StatusText.Text = message; if (!_verificationMode) MessageBox.Show(this, message, "EasyLatex", MessageBoxButton.OK, MessageBoxImage.Warning); }
     private void WriteRecovery()
     {
         try
         {
             var unsaved = _documents.Where(d => d.IsDirty || d.FilePath is null && d.Document.Text != Templates.Article && d.Document.Text.Length > 0).Select(d => new RecoveryFile(d.FilePath, d.Document.Text)).ToList();
-            Directory.CreateDirectory(SettingsStore.DirectoryPath); File.WriteAllText(Path.Combine(SettingsStore.DirectoryPath, "recovery.json"), JsonSerializer.Serialize(unsaved));
+            Directory.CreateDirectory(SettingsStore.DirectoryPath);
+            var path = Path.Combine(SettingsStore.DirectoryPath, "recovery.json");
+            File.WriteAllText(path + ".tmp", JsonSerializer.Serialize(unsaved)); File.Move(path + ".tmp", path, true);
         }
         catch (IOException) { }
     }
-    private void RestoreRecovery()
+    private void RestoreRecovery(bool acceptForVerification = false)
     {
+        if (_verificationMode && !acceptForVerification) return;
         var path = Path.Combine(SettingsStore.DirectoryPath, "recovery.json");
         try
         {
             if (!File.Exists(path)) return; var files = JsonSerializer.Deserialize<List<RecoveryFile>>(File.ReadAllText(path));
             if (files is null || files.Count == 0) return;
-            if (MessageBox.Show(this, $"发现 {files.Count} 份上次未保存的内容，是否恢复？", "恢复写作", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+            if (!acceptForVerification && MessageBox.Show(this, $"发现 {files.Count} 份上次未保存的内容，是否恢复？", "恢复写作", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
             foreach (var file in files) { var d = new DocumentSession(file.Text, file.Path); d.MarkDirty(); AddDocument(d); }
         }
         catch (Exception ex) when (ex is IOException or JsonException) { StatusText.Text = "恢复记录无法读取，请检查本机 EasyLatex 数据目录"; }
     }
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
-        foreach (var doc in _documents) if (!ConfirmClose(doc)) { e.Cancel = true; return; }
+        if (!_verificationMode) foreach (var doc in _documents) if (!ConfirmClose(doc)) { e.Cancel = true; return; }
         _buildCancel?.Cancel(); _aiCancel?.Cancel(); _pdfCancel?.Cancel(); _recoveryTimer.Stop();
         _settings.WindowWidth = ActualWidth; _settings.WindowHeight = ActualHeight; SettingsStore.Save(_settings);
         var recovery = Path.Combine(SettingsStore.DirectoryPath, "recovery.json"); if (File.Exists(recovery)) File.Delete(recovery);
+    }
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i); if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } result) return result;
+        }
+        return null;
     }
 }

@@ -63,7 +63,14 @@ The optional AI assistant can help with a selected passage or a compile error.
     public const string Beamer = """
 % !TeX program = xelatex
 \documentclass{beamer}
-\usetheme{Madrid}
+\usetheme{default}
+\usepackage{fontspec}
+\setsansfont{lmsans10-regular.otf}
+\setmainfont{lmroman10-regular.otf}
+\usefonttheme{professionalfonts}
+\definecolor{easyaccent}{RGB}{104,84,204}
+\setbeamercolor{structure}{fg=easyaccent}
+\setbeamertemplate{navigation symbols}{}
 \usepackage{amsmath}
 \title{One idea, clearly told}
 \author{Your name}
