@@ -65,6 +65,8 @@ internal static class Program
     {
         Check("outline-comments-and-depth", LatexParser.GetOutline("% \\section{hidden}\n\\section{A}\n\\subsection{B}\n\\subsubsection*{C}").SequenceEqual(new[] { new OutlineEntry("A", 2, 0), new OutlineEntry("B", 3, 1), new OutlineEntry("C", 4, 2) }));
         Check("escaped-percent", LatexParser.RemoveComment("50\\% yes % hidden") == "50\\% yes ");
+        var outline = LatexParser.GetOutline("\\section{A \\emph{title}}\\label{sec:a}\n\\subsection{Escaped \\{braces\\}}\\label{sec:b}");
+        Check("outline-stops-before-label-and-matches-braces", outline.Count == 2 && outline[0].Title == "A \\emph{title}" && outline[1].Title == "Escaped \\{braces\\}");
         Check("master-relative", LatexParser.ResolveMaster(Path.Combine(Root, "chapter", "part.tex"), "% !TEX root = ../main.tex") == Path.Combine(Root, "main.tex"));
         Check("engine-chinese", LatexParser.ResolveEngine("中文", EngineKind.Auto) == EngineKind.XeLaTeX);
         Check("engine-magic", LatexParser.ResolveEngine("% !TeX program = lualatex\n中文", EngineKind.Auto) == EngineKind.LuaLaTeX);

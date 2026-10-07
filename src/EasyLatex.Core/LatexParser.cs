@@ -4,7 +4,7 @@ namespace EasyLatex.Core;
 
 public static class LatexParser
 {
-    private static readonly Regex Sections = new(@"^\s*\\(?<kind>part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{(?<title>.*)\}", RegexOptions.Compiled);
+    private static readonly Regex Sections = new(@"^\s*\\(?<kind>part|chapter|section|subsection|subsubsection)\*?(?:\[[^\]]*\])?\{", RegexOptions.Compiled);
     private static readonly Regex FileError = new(@"^(?<file>.+\.(?:tex|sty|cls|bib)):(?<line>\d+):\s*(?<message>.*)$", RegexOptions.Compiled);
     private static readonly Regex LogLine = new(@"^l\.(?<line>\d+)\s*(?<code>.*)$", RegexOptions.Compiled);
     public static IReadOnlyList<OutlineEntry> GetOutline(string source)
@@ -13,10 +13,19 @@ public static class LatexParser
         var lines = source.Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
-            var m = Sections.Match(RemoveComment(lines[i]));
+            var text = RemoveComment(lines[i]);
+            var m = Sections.Match(text);
             if (!m.Success) continue;
             var depth = m.Groups["kind"].Value switch { "subsection" => 1, "subsubsection" => 2, _ => 0 };
-            result.Add(new(m.Groups["title"].Value.Trim(), i + 1, depth));
+            var start = m.Index + m.Length;
+            var braces = 1;
+            for (var at = start; at < text.Length; at++)
+            {
+                if (text[at] == '\\') { at++; continue; }
+                if (text[at] == '{') braces++;
+                if (text[at] == '}' && --braces == 0)
+                { result.Add(new(text[start..at].Trim(), i + 1, depth)); break; }
+            }
         }
         return result;
     }
