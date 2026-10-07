@@ -15,7 +15,10 @@ if ($WarmCache) {
     New-Item -ItemType Directory -Force $warmDirectory | Out-Null
     $fonts = [Security.SecurityElement]::Escape([Environment]::GetFolderPath('Fonts').Replace('\','/'))
     $fontConfig = Join-Path $warmDirectory 'fonts.conf'
-    [IO.File]::WriteAllText($fontConfig, "<?xml version=`"1.0`"?><fontconfig><dir>$fonts</dir></fontconfig>")
+    $fontCacheDirectory = Join-Path $taskRoot '.tools/font-cache'
+    New-Item -ItemType Directory -Force $fontCacheDirectory | Out-Null
+    $fontCache = [Security.SecurityElement]::Escape($fontCacheDirectory.Replace('\','/'))
+    [IO.File]::WriteAllText($fontConfig, "<?xml version=`"1.0`"?><fontconfig><dir>$fonts</dir><cachedir>$fontCache</cachedir></fontconfig>")
     $env:FONTCONFIG_FILE = $fontConfig
     $templates = [IO.File]::ReadAllText((Join-Path $taskRoot 'src/EasyLatex/Templates.cs'))
     foreach ($match in [regex]::Matches($templates, '(?s)public const string (\w+) = """(.*?)""";')) {
