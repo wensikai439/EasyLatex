@@ -36,6 +36,7 @@ if ($Publish) {
         if (Test-Path (Join-Path $sdkDirectory $notice)) { Copy-Item (Join-Path $sdkDirectory $notice) "$output/licenses/Dotnet-$notice" }
     }
     Copy-Item 'examples' $output -Recurse -Force
+    Copy-Item 'docs' $output -Recurse -Force
     Compress-Archive -Path "$output/*" -DestinationPath 'artifacts/EasyLatex-win-x64.zip' -Force
     $hash = Get-FileHash 'artifacts/EasyLatex-win-x64.zip' -Algorithm SHA256
     [IO.File]::WriteAllText((Join-Path $taskRoot 'artifacts/SHA256SUMS.txt'), $hash.Hash.ToLowerInvariant() + '  EasyLatex-win-x64.zip' + [Environment]::NewLine)
