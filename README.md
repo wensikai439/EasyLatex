@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">产品官网</a>
   ·
-  <a href="https://github.com/wensikai439/EasyLatex/releases/tag/v0.3.0-preview.9">下载 Windows 版</a>
+  <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.9/EasyLatex-0.3.0-preview.9-win-x64.zip">下载 Windows 版</a>
 </p>
 
 ## 01 · 常用模块，点击即用
