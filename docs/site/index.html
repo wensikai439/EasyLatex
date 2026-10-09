@@ -7,7 +7,7 @@
   <meta name="description" content="专为数学建模打造的轻量 LaTeX 一键编译器。常用模块点击即用，局域网联机写作，让 Codex 和 Claude Code 通过 MCP 操控编译器。">
   <title>EasyLatex · 数学建模 LaTeX 一键编译器</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=11.3">
 </head>
 <body>
   <header class="nav wrap"><a class="brand" href="#" aria-label="EasyLatex 首页"><span class="brand-mark">E</span>EasyLatex</a><a href="https://github.com/wensikai439/EasyLatex">GitHub</a></header>
@@ -16,11 +16,13 @@
       <h1>EasyLatex</h1>
       <p>专为数学建模打造的轻量 LaTeX 一键编译器</p>
       <p class="summary">常用模块一键插入，图片直接粘贴，源码与 PDF 双击互跳，支持局域网协作和 AI 修改、编译。</p>
-      <a class="download" href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.9/EasyLatex-0.3.0-preview.9-win-x64.zip">下载 Windows 版</a>
+      <a class="download" href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.11/EasyLatex-0.3.0-preview.11-win-x64.zip">下载 Windows 版</a>
     </section>
     <section class="feature wrap" id="modules">
-      <div class="feature-heading"><span class="number">01</span><div><h2>常用模块，点击即用。</h2><p>悬停行边的＋号，插入摘要、章节、公式、三线表和图片，直接填内容。</p></div></div>
-      <video autoplay loop muted playsinline controls preload="auto" poster="media/blocks.png" aria-label="悬停＋号、插入摘要、填写内容并编译的演示"><source src="media/blocks.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/blocks.mp4">下载插入演示</a></video>
+      <div class="feature-heading"><span class="number">01</span><div><h2>常用模块，点击即用。</h2><p>空行悬停＋号，插入摘要、章节、公式、三线表和图片。蓝色标出可填位置，短提示告诉你这里写什么。</p></div></div>
+      <video autoplay loop muted playsinline controls preload="auto" poster="media/blocks.png?v=11.3" aria-label="悬停＋号插入章节，蓝色提示标题；插入分式，分别提示分子与分母"><source src="media/blocks.mp4?v=11.3" type="video/mp4">你的浏览器不支持视频。<a href="media/blocks.mp4">下载插入演示</a></video>
+      <div class="image-heading"><h3>识别代码块，直接改格式。</h3><p>正文、标题、分点、公式和表格自动识别。悬停看清修改范围，点 A+ 放大字号，源码和 PDF 一起更新。</p></div>
+      <video autoplay loop muted playsinline controls preload="metadata" poster="media/formatting.png" aria-label="悬停识别正文并标亮整块，点击 A+ 放大字号，源码与 PDF 一起更新"><source src="media/formatting.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/formatting.mp4">下载格式演示</a></video>
       <div class="image-heading"><h3>图片，直接粘贴。</h3><p>改文件名，点选插入位置。图片保存与 LaTeX 代码一起完成。</p></div>
       <video autoplay loop muted playsinline controls preload="metadata" poster="media/images.png" aria-label="粘贴图片、修改文件名、选择位置并生成图片代码的演示"><source src="media/images.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/images.mp4">下载图片演示</a></video>
     </section>
@@ -33,16 +35,31 @@
       <video autoplay loop muted playsinline controls preload="metadata" poster="media/ai.png" aria-label="接入 Codex 或 Claude Code，AI 通过 MCP 读取文稿、修复源码、调用 EasyLatex 编译的演示"><source src="media/ai.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/ai.mp4">下载 AI 演示</a></video>
       <p class="mcp">同样提供 DeepSeek Harness、WorkBuddy 接入配置。也可在应用内填写 API，使用兼容的模型服务。</p>
     </section>
+    <section class="templates wrap" aria-labelledby="templates-title">
+      <h2 id="templates-title">内置模板</h2>
+      <div class="template-carousel" aria-roledescription="轮播" aria-label="三类内置模板" tabindex="0">
+        <div class="template-stage">
+          <article class="template-card is-active" data-template="0" aria-label="1 / 3 · 数模论文模板">
+            <div class="template-preview"><img src="media/template-modeling.webp" width="747" height="1074" alt="数模模板实际排版：问题重述、模型假设、符号说明与问题一" loading="lazy"></div>
+            <div class="template-caption"><h3>数模论文模板</h3><p>问题一至四：建模求解、结果验证、敏感性分析。</p></div>
+          </article>
+          <article class="template-card is-right" data-template="1" aria-label="2 / 3 · 文理科论文模板">
+            <div class="template-preview template-pair"><figure><figcaption>文科</figcaption><img src="media/template-humanities.webp" width="747" height="1074" alt="文科模板实际排版：引言、文献与理论、材料与方法、分析与论证" loading="lazy"></figure><figure><figcaption>理科</figcaption><img src="media/template-science.webp" width="747" height="1074" alt="理科模板实际排版：引言、研究方法、结果、讨论与结论" loading="lazy"></figure></div>
+            <div class="template-caption"><h3>文理科论文模板</h3><p>文科论证与理科研究，分别准备论文结构。</p></div>
+          </article>
+          <article class="template-card is-left" data-template="2" aria-label="3 / 3 · 数学讲义模板">
+            <div class="template-preview"><img src="media/template-handout.webp" width="747" height="1074" alt="数学讲义实际排版：知识要点、定义、定理、证明、例题与练习" loading="lazy"></div>
+            <div class="template-caption"><h3>数学讲义模板</h3><p>定义、定理、证明、例题与练习。</p></div>
+          </article>
+        </div>
+        <div class="template-controls"><div class="template-dots" aria-label="选择模板"><button type="button" data-template-select="0" aria-label="数模论文模板" aria-pressed="true"></button><button type="button" data-template-select="1" aria-label="文理科论文模板" aria-pressed="false"></button><button type="button" data-template-select="2" aria-label="数学讲义模板" aria-pressed="false"></button></div></div>
+      </div>
+    </section>
   </main>
   <footer class="wrap">
     <div class="footer-meta"><span>EasyLatex</span><span>动画为操作流程示意</span><a href="https://github.com/wensikai439/EasyLatex#使用">使用说明</a></div>
     <p class="feedback">功能改进中。有改进想法，欢迎在 <a href="https://github.com/wensikai439/EasyLatex/issues/new">GitHub 提 Issue</a>，一起把体验做好。谢谢大家。</p>
   </footer>
-  <script>
-    const videos=[...document.querySelectorAll('video')];
-    const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-    function motion(){for(const video of videos){if(reduced.matches){video.autoplay=false;video.pause();}else{video.autoplay=true;video.play().catch(()=>{});}}}
-    reduced.addEventListener('change',motion);motion();
-  </script>
+  <script src="showcase.js?v=11.3" defer></script>
 </body>
 </html>
