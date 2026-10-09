@@ -2,8 +2,10 @@
 
 <p align="center"><strong>专为数学建模打造的轻量 LaTeX 一键编译器</strong></p>
 
+<p align="center">常用模块一键插入，图片直接粘贴，源码与 PDF 双击互跳，支持局域网协作和 AI 修改、编译。</p>
+
 <p align="center">
-  <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">产品官网</a>
+  <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">官网</a>
   ·
   <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.9/EasyLatex-0.3.0-preview.9-win-x64.zip">下载 Windows 版</a>
 </p>
