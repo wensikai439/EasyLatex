@@ -14,11 +14,11 @@
 
 三线表可悬停选择行列。新插入的代码高亮 **6 秒**，位置一眼可见。
 
-<p align="center"><img src="docs/assets/demo-blocks.gif" width="900" alt="悬停＋号，选择摘要，直接填写并编译"></p>
+<p align="center"><img src="docs/assets/demo-blocks.gif" width="88%" alt="悬停＋号，选择摘要，直接填写并编译"></p>
 
 **图片直接粘贴。** 修改文件名，点击正文中的插入位置；应用保存图片到 `figures/`，生成图片代码并补充宏包。
 
-<p align="center"><img src="docs/assets/demo-images.gif" width="900" alt="粘贴图片、修改名称、点击位置，自动保存并生成代码"></p>
+<p align="center"><img src="docs/assets/demo-images.gif" width="88%" alt="粘贴图片、修改名称、点击位置，自动保存并生成代码"></p>
 
 ## 02 · 局域网联机，一起写
 
@@ -26,7 +26,7 @@
 
 章节、参考文献和图片在同一个项目里同步。看见彼此的光标，各自撤销自己的修改；断线继续本地写，重连后合并。
 
-<p align="center"><img src="docs/assets/demo-collaboration.gif" width="900" alt="开启房间，确认同伴加入，一起编辑论文"></p>
+<p align="center"><img src="docs/assets/demo-collaboration.gif" width="88%" alt="开启房间，确认同伴加入，一起编辑论文"></p>
 
 ## 03 · 让 Codex、Claude Code 操控编译器
 
@@ -36,7 +36,7 @@
 
 AI 可以读取文稿与错误、修改源码、插入常用模块，调用 EasyLatex 编译。应用提供 Codex、Claude Code、DeepSeek Harness、WorkBuddy 的接入配置。
 
-<p align="center"><img src="docs/assets/demo-ai.gif" width="900" alt="连接 Codex 或 Claude Code，AI 通过 MCP 读取、修改源码并调用 EasyLatex 编译"></p>
+<p align="center"><img src="docs/assets/demo-ai.gif" width="88%" alt="连接 Codex 或 Claude Code，AI 通过 MCP 读取、修改源码并调用 EasyLatex 编译"></p>
 
 也可直接在应用内填写 API 地址、模型和密钥，使用支持 Chat Completions 的服务。应用内助手先展示修改建议，由你审阅后应用。
 
