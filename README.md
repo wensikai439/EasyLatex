@@ -7,18 +7,20 @@
 <p align="center">
   <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">官网</a>
   ·
-  <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.9/EasyLatex-0.3.0-preview.9-win-x64.zip">下载 Windows 版</a>
+  <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.10/EasyLatex-0.3.0-preview.10-win-x64.zip">下载 Windows 版</a>
 </p>
 
 ## 01 · 常用模块，点击即用
 
-面向数模团队的论文手：悬停光标行旁的 **＋**，展开摘要、章节、公式、三线表和图片。点击生成 LaTeX 代码，直接填写内容，不必先记住这些模块的命令。
+面向数模团队的论文手：空行旁显示 **＋**，悬停展开摘要、章节、公式、三线表和图片。点击生成 LaTeX 代码，直接填写内容，不必先记住这些模块的命令。
+
+有内容的行显示块类型，悬停即可切换正文与标题；选中文字可加粗、斜体或调整字号。插入和改格式后自动更新预览，首次使用先保存文件。
 
 三线表可悬停选择行列。新插入的代码高亮 **6 秒**，位置一眼可见。
 
 <p align="center"><img src="docs/assets/demo-blocks.gif" width="88%" alt="悬停＋号，选择摘要，直接填写并编译"></p>
 
-**图片直接粘贴。** 修改文件名，点击正文中的插入位置；应用保存图片到 `figures/`，生成图片代码并补充宏包。
+**图片直接粘贴。** 修改文件名，按章节提示选择插入位置；应用保存图片到 `figures/`，生成代码并按正文顺序排版。
 
 <p align="center"><img src="docs/assets/demo-images.gif" width="88%" alt="粘贴图片、修改名称、点击位置，自动保存并生成代码"></p>
 
@@ -58,7 +60,7 @@ AI 可以读取文稿与错误、修改源码、插入常用模块，调用 Easy
 
 ## 当前预览版
 
-**0.3.0-preview.9 · Windows x64**，支持 Windows 10 2004+ / Windows 11。
+**0.3.0-preview.10 · Windows x64**，支持 Windows 10 2004+ / Windows 11。
 
 附带轻量编译引擎与五个内置模板的资源缓存，无需另装 .NET。内置模板可离线编译；新增宏包首次可能需要联网。需要 Biber、LuaLaTeX 或复杂自定义构建的项目可使用已有 TeX Live / MiKTeX。
 
