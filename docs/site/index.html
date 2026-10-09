@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="专为数学建模打造的轻量 LaTeX 一键编译器。常用模块点击即用，局域网联机写作，让 Codex 和 Claude Code 通过 MCP 操控编译器。">
+  <title>EasyLatex · 数学建模 LaTeX 一键编译器</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav wrap"><a class="brand" href="#" aria-label="EasyLatex 首页"><span class="brand-mark">E</span>EasyLatex</a><a href="https://github.com/wensikai439/EasyLatex">GitHub</a></header>
+  <main>
+    <section class="intro wrap">
+      <h1>EasyLatex</h1>
+      <p>专为数学建模打造的轻量 LaTeX 一键编译器</p>
+      <a class="download" href="https://github.com/wensikai439/EasyLatex/releases/tag/v0.3.0-preview.9">下载 Windows 版</a>
+    </section>
+    <section class="feature wrap" id="modules">
+      <div class="feature-heading"><span class="number">01</span><div><h2>常用模块，点击即用。</h2><p>悬停行边的＋号，插入摘要、章节、公式、三线表和图片，直接填内容。</p></div></div>
+      <video autoplay loop muted playsinline controls preload="auto" poster="media/blocks.png" aria-label="悬停＋号、插入摘要、填写内容并编译的演示"><source src="media/blocks.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/blocks.mp4">下载插入演示</a></video>
+      <div class="image-heading"><h3>图片，直接粘贴。</h3><p>改文件名，点选插入位置。图片保存与 LaTeX 代码一起完成。</p></div>
+      <video autoplay loop muted playsinline controls preload="metadata" poster="media/images.png" aria-label="粘贴图片、修改文件名、选择位置并生成图片代码的演示"><source src="media/images.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/images.mp4">下载图片演示</a></video>
+    </section>
+    <section class="feature wrap" id="collaboration">
+      <div class="feature-heading"><span class="number">02</span><div><h2>局域网联机，一起写。</h2><p>房主开启房间，同伴申请加入。章节、参考文献和图片在同一个项目里同步。</p></div></div>
+      <video autoplay loop muted playsinline controls preload="metadata" poster="media/collaboration.png" aria-label="开启局域网房间、允许同伴加入、共同编辑的演示"><source src="media/collaboration.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/collaboration.mp4">下载协作演示</a></video>
+    </section>
+    <section class="feature wrap" id="ai">
+      <div class="feature-heading"><span class="number">03</span><div><h2>让 Codex、Claude Code 操控编译器。</h2><p>接入 MCP，直接告诉 AI 要改什么。读取文稿、修改代码、编译和检查错误，由它调用 EasyLatex 完成。</p></div></div>
+      <video autoplay loop muted playsinline controls preload="metadata" poster="media/ai.png" aria-label="接入 Codex 或 Claude Code，AI 通过 MCP 读取文稿、修复源码、调用 EasyLatex 编译的演示"><source src="media/ai.mp4" type="video/mp4">你的浏览器不支持视频。<a href="media/ai.mp4">下载 AI 演示</a></video>
+      <p class="mcp">同样提供 DeepSeek Harness、WorkBuddy 接入配置。也可在应用内填写 API，使用兼容的模型服务。</p>
+    </section>
+  </main>
+  <footer class="wrap"><span>EasyLatex</span><span>动画为操作流程示意</span><a href="https://github.com/wensikai439/EasyLatex#使用">使用说明</a></footer>
+  <script>
+    const videos=[...document.querySelectorAll('video')];
+    const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+    function motion(){for(const video of videos){if(reduced.matches){video.autoplay=false;video.pause();}else{video.autoplay=true;video.play().catch(()=>{});}}}
+    reduced.addEventListener('change',motion);motion();
+  </script>
+</body>
+</html>

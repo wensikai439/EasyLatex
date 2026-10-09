@@ -1,56 +1,63 @@
-# EasyLatex
+<h1 align="center">EasyLatex</h1>
 
-一个轻量 LaTeX 一键使用编译器。Windows 原生桌面界面，左侧写作、右侧真实 PDF 预览，并提供可选的 API AI 助手。
+<p align="center"><strong>专为数学建模打造的轻量 LaTeX 一键编译器</strong></p>
 
-Windows x64 便携版：下载 [最新发行包](https://github.com/wensikai439/EasyLatex/releases/latest)，解压整个文件夹后双击 `EasyLatex.exe`。不需要另外安装 .NET 或完整 TeX 发行版。支持 Windows 10 2004+ / Windows 11。
+<p align="center">
+  <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">产品官网</a>
+  ·
+  <a href="https://github.com/wensikai439/EasyLatex/releases/tag/v0.3.0-preview.9">下载 Windows 版</a>
+</p>
 
-![EasyLatex 写作界面](docs/assets/workspace.png)
+## 01 · 常用模块，点击即用
+
+面向数模团队的论文手：悬停光标行旁的 **＋**，展开摘要、章节、公式、三线表和图片。点击生成 LaTeX 代码，直接填写内容，不必先记住这些模块的命令。
+
+三线表可悬停选择行列。新插入的代码高亮 **6 秒**，位置一眼可见。
+
+<p align="center"><img src="docs/assets/demo-blocks.gif" width="900" alt="悬停＋号，选择摘要，直接填写并编译"></p>
+
+**图片直接粘贴。** 修改文件名，点击正文中的插入位置；应用保存图片到 `figures/`，生成图片代码并补充宏包。
+
+<p align="center"><img src="docs/assets/demo-images.gif" width="900" alt="粘贴图片、修改名称、点击位置，自动保存并生成代码"></p>
+
+## 02 · 局域网联机，一起写
+
+房主开启房间，同伴从附近房间申请加入，确认后共同编辑。
+
+章节、参考文献和图片在同一个项目里同步。看见彼此的光标，各自撤销自己的修改；断线继续本地写，重连后合并。
+
+<p align="center"><img src="docs/assets/demo-collaboration.gif" width="900" alt="开启房间，确认同伴加入，一起编辑论文"></p>
+
+## 03 · 让 Codex、Claude Code 操控编译器
+
+通过 **MCP** 连接 EasyLatex，直接告诉 AI 要做什么：
+
+> 修复当前公式的语法，保留正文，然后编译并检查错误。
+
+AI 可以读取文稿与错误、修改源码、插入常用模块，调用 EasyLatex 编译。应用提供 Codex、Claude Code、DeepSeek Harness、WorkBuddy 的接入配置。
+
+<p align="center"><img src="docs/assets/demo-ai.gif" width="900" alt="连接 Codex 或 Claude Code，AI 通过 MCP 读取、修改源码并调用 EasyLatex 编译"></p>
+
+也可直接在应用内填写 API 地址、模型和密钥，使用支持 Chat Completions 的服务。应用内助手先展示修改建议，由你审阅后应用。
+
+[AI 工具接入说明](docs/ai-tools.md)
+
+<sub>以上动画为操作流程示意，不作为编译或同步耗时的测量结果。</sub>
 
 ## 使用
 
-打开 `.tex` 或项目文件夹，按 **Ctrl+Enter** 保存并编译。也可以在「文件」菜单新建英文、中文或 Beamer 模板。编译产物集中保存在项目 `.easylatex/build`。
+1. 下载并解压**整个文件夹**，双击 `EasyLatex.exe`。
+2. 打开 `.tex` 或项目文件夹；也可从「文件」新建数模写作模板。
+3. 按 **Ctrl+Enter** 保存并编译，左侧编辑，右侧查看 PDF。
 
-便携包附带 Tectonic 和三个内置模板所需的宏包、字体缓存，首次使用这些模板也能离线编译。新增宏包按需联网下载，随后复用缓存；设置里的「轻量引擎仅使用缓存」可显式关闭资源下载。已有 TeX Live / MiKTeX 会自动检测。需要 Biber、LuaLaTeX 或复杂自定义构建的项目，使用完整 TeX 发行版。
+双击源码或 PDF 文字即可双向定位。编译日志留在后台，界面不自动弹出日志窗口。
 
-常用功能：多文件标签、大纲、语法高亮、代码补全、环境片段、折叠、查找替换、注释、引用键补全、错误跳转、PDF 缩放、SyncTeX、PDF 导出、中文与演示文稿模板、未保存内容恢复。
+同一款应用也提供数学讲义模板，以及定义、例题、练习等常用模块。
 
-自动编译开关会在停止输入后自动保存并构建已保存的文件。手动模式始终可用。中文模板使用 XeLaTeX / Tectonic 和 Fandol 字体，不需要先寻找中文字库。
+## 当前预览版
 
-| 常用操作 | 快捷键 |
-| --- | --- |
-| 保存并编译 / 取消编译 | Ctrl+Enter |
-| 查找 / 替换 | Ctrl+F / Ctrl+H |
-| 注释 / 取消注释 | Ctrl+/ |
-| 源码定位 PDF | Ctrl+J |
-| PDF 定位源码 | 双击 PDF 正文，或 Ctrl+点击 PDF |
-| 缩放预览 | Ctrl+滚轮 |
-| 专注写作 | F11 |
-| 撤销，包括 AI 修改 | Ctrl+Z |
+**0.3.0-preview.9 · Windows x64**，支持 Windows 10 2004+ / Windows 11。
 
-左右工具栏提供「定位 PDF →」和「← 定位源码」按钮。源码定位使用光标位置，并在 PDF 中标出对应内容；点击「定位源码」后选择 PDF 正文，会打开对应文件并选中所在行，按 Esc 可取消。编译后继续插入或删除行也会按源码版本映射位置；新增的内容需编译后才出现在 PDF 中。重新编译同一个文档会保留阅读位置。
+附带轻量编译引擎与五个内置模板的资源缓存，无需另装 .NET。内置模板可离线编译；新增宏包首次可能需要联网。需要 Biber、LuaLaTeX 或复杂自定义构建的项目可使用已有 TeX Live / MiKTeX。
 
-完整便携包约 **118 MiB 下载、190 MiB 解压**，包含 .NET、编译引擎与模板资源。大小指磁盘空间，运行内存随文档、缩放和 Windows 环境变化。0.2.0 的测试与打包取舍见 [验收记录](docs/verification.md)。
-
-## AI
-
-设置中填写兼容 OpenAI Chat Completions 的 API 根地址、模型名称和密钥。例如根地址为 `https://api.openai.com/v1`，本机模型可以使用 `http://localhost:11434/v1`。需要用户自己选择服务和模型，可能产生该服务的费用。
-
-点击发送时才上传选区或当前文件及编译错误；不会自动上传其他项目文件。密钥保存到 Windows 凭据管理器。AI 提出可核对的修改，校验定位与重叠后由用户应用，再实际编译验证。按 Ctrl+Z 可撤销。
-
-已通过本机 HTTP 模拟服务验证请求、错误响应、超时、取消、修改预览、应用后编译和撤销。外部模型的实际表现取决于你配置的服务；本次没有使用付费 API 密钥进行外部模型评估。
-
-## 开发
-
-要求 Windows 10 2004+ / Windows 11、.NET 10 SDK。
-
-```powershell
-./scripts/bootstrap.ps1       # 下载校验后的官方轻量编译引擎
-./scripts/bootstrap.ps1 -WarmCache # 准备并离线验证三个模板的资源
-./scripts/build.ps1           # 构建
-./scripts/build.ps1 -Verify   # 真实编译及 WPF 界面验证
-./scripts/build.ps1 -Publish  # 自包含便携包
-```
-
-开发工具在 `.tools`，构建与验证产物在 `artifacts`，都不提交到 Git。
-
-实际验收范围与记录见 [docs/verification.md](docs/verification.md)，设计依据与参考项目见 [docs/design.md](docs/design.md)。MIT 开源，第三方组件见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+联机需要电脑可以互访；访客网络隔离或防火墙可能阻止连接。本机多进程协作、断线恢复和压力测试已验证，真实双机体验仍待验收。MCP 协议与接入配置已测试，WorkBuddy 等客户端的完整模型任务尚未逐一联调。
