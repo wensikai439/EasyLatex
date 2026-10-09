@@ -7,16 +7,16 @@
 <p align="center">
   <a href="https://easylatex.upbeat-koala-8310.chatgpt.site">官网</a>
   ·
-  <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.10/EasyLatex-0.3.0-preview.10-win-x64.zip">下载 Windows 版</a>
+  <a href="https://github.com/wensikai439/EasyLatex/releases/download/v0.3.0-preview.11/EasyLatex-0.3.0-preview.11-win-x64.zip">下载 Windows 版</a>
 </p>
 
 ## 01 · 常用模块，点击即用
 
 面向数模团队的论文手：空行旁显示 **＋**，悬停展开摘要、章节、公式、三线表和图片。点击生成 LaTeX 代码，直接填写内容，不必先记住这些模块的命令。
 
-有内容的行显示块类型，悬停即可切换正文与标题；选中文字可加粗、斜体或调整字号。插入和改格式后自动更新预览，首次使用先保存文件。
+有内容的功能块只显示一个入口，悬停标亮整块；支持正文、标题、分点列表、公式和表格。选中文字可加粗、斜体或调整字号。插入和改格式后自动更新预览，首次使用先保存文件。
 
-三线表可悬停选择行列。新插入的代码高亮 **6 秒**，位置一眼可见。
+三线表可悬停选择行列。新代码高亮 **6 秒**；可填写的位置用蓝色和“标题”“图注”等短提示标出，离开该块后消失。
 
 <p align="center"><img src="docs/assets/demo-blocks.gif" width="88%" alt="悬停＋号，选择摘要，直接填写并编译"></p>
 
@@ -56,11 +56,11 @@ AI 可以读取文稿与错误、修改源码、插入常用模块，调用 Easy
 
 双击源码或 PDF 文字即可双向定位。编译日志留在后台，界面不自动弹出日志窗口。
 
-同一款应用也提供数学讲义模板，以及定义、例题、练习等常用模块。
+数模模板按问题一至四分别安排建立与求解、结果与验证、敏感性分析。同一款应用也提供数学讲义、文科论文和理科论文模板。
 
 ## 当前预览版
 
-**0.3.0-preview.10 · Windows x64**，支持 Windows 10 2004+ / Windows 11。
+**0.3.0-preview.11 · Windows x64**，支持 Windows 10 2004+ / Windows 11。
 
 附带轻量编译引擎与五个内置模板的资源缓存，无需另装 .NET。内置模板可离线编译；新增宏包首次可能需要联网。需要 Biber、LuaLaTeX 或复杂自定义构建的项目可使用已有 TeX Live / MiKTeX。
 
